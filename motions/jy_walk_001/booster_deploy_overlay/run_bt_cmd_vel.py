@@ -150,7 +150,7 @@ def main() -> int:
     parser = argparse.ArgumentParser(
         description="Run booster_deploy with velocity commands from INHA BT."
     )
-    parser.add_argument("--task", default="walk_001")
+    parser.add_argument("--task", default="k1_scratch_walk_001")
     parser.add_argument("--checkpoint", default=DEFAULT_CHECKPOINT)
     parser.add_argument("--topic", default="/inha/custom_motion/cmd_vel")
     parser.add_argument("--device", default="cpu")

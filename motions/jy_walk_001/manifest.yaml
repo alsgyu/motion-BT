@@ -10,7 +10,7 @@ brain:
 
 booster_deploy:
   repo_path: /home/booster/Workspace/deploy
-  task_hint: walk_001
+  task_hint: k1_scratch_walk_001
   task_config_hint: /home/booster/Workspace/deploy/tasks/scratch/walk_001.py
   checkpoint_path: /home/booster/Workspace/deploy/tasks/scratch/models/JY_walk_001_symmetry_2026-07-30_18-18-57_best_best.pt
   runner: booster_deploy_overlay/run_bt_cmd_vel.py
