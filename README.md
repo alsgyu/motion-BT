@@ -92,3 +92,6 @@ Example:
 - The overlay keeps the RL gait output for the body and overrides only the head
   yaw/pitch joint targets from the latest head command.
 - `RLVisionKick` switches back to soccer mode before starting VisualKick.
+- In custom motion mode, `RLVisionKick` waits until the robot state confirms
+  soccer mode before sending `VisualKick(true)`, then the root mode gate returns
+  to custom mode after the visual-kick lock clears.

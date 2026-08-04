@@ -6,7 +6,10 @@ repo_root="$(cd "$script_dir/.." && pwd)"
 inha_soccer_root="${1:-/home/booster/Workspace/INHA-Soccer}"
 player_root="$inha_soccer_root/INHA-Player"
 patch_file="$repo_root/patches/inha-player-custom-motion.patch"
-upgrade_patch_file="$repo_root/patches/inha-player-head-motion-upgrade.patch"
+upgrade_patch_files=(
+  "$repo_root/patches/inha-player-head-motion-upgrade.patch"
+  "$repo_root/patches/inha-player-kick-mode-upgrade.patch"
+)
 
 if [ ! -d "$player_root/src/brain" ]; then
   echo "[ERROR] INHA-Player brain package not found: $player_root/src/brain" >&2
@@ -19,22 +22,34 @@ if ! git -C "$inha_soccer_root" rev-parse --show-toplevel >/dev/null 2>&1; then
   exit 1
 fi
 
-if git -C "$inha_soccer_root" apply --reverse --check "$patch_file" >/dev/null 2>&1; then
-  echo "[PATCH] custom motion patch already applied"
-elif git -C "$inha_soccer_root" apply --check "$patch_file" >/dev/null 2>&1; then
+apply_upgrade_patch() {
+  local upgrade_patch_file="$1"
+  local upgrade_patch_name
+  upgrade_patch_name="$(basename "$upgrade_patch_file")"
+
+  if git -C "$inha_soccer_root" apply --reverse --check "$upgrade_patch_file" >/dev/null 2>&1; then
+    echo "[PATCH] $upgrade_patch_name already applied"
+  elif git -C "$inha_soccer_root" apply --check "$upgrade_patch_file" >/dev/null 2>&1; then
+    echo "[PATCH] applying $upgrade_patch_name"
+    git -C "$inha_soccer_root" apply "$upgrade_patch_file"
+  else
+    echo "[ERROR] Could not apply $upgrade_patch_name automatically." >&2
+    echo "        Your INHA-Soccer tree may have local changes in the same files." >&2
+    echo "        Check with: git -C $inha_soccer_root status --short" >&2
+    exit 1
+  fi
+}
+
+if git -C "$inha_soccer_root" apply --check "$patch_file" >/dev/null 2>&1; then
   echo "[PATCH] applying custom motion patch"
   git -C "$inha_soccer_root" apply "$patch_file"
-elif git -C "$inha_soccer_root" apply --reverse --check "$upgrade_patch_file" >/dev/null 2>&1; then
-  echo "[PATCH] head motion upgrade already applied"
-elif git -C "$inha_soccer_root" apply --check "$upgrade_patch_file" >/dev/null 2>&1; then
-  echo "[PATCH] applying head motion upgrade patch"
-  git -C "$inha_soccer_root" apply "$upgrade_patch_file"
 else
-  echo "[ERROR] Could not apply custom motion patch automatically." >&2
-  echo "        Your INHA-Soccer tree may have local changes in the same files." >&2
-  echo "        Check with: git -C $inha_soccer_root status --short" >&2
-  exit 1
+  echo "[PATCH] custom motion base patch already present or partially present"
 fi
+
+for upgrade_patch_file in "${upgrade_patch_files[@]}"; do
+  apply_upgrade_patch "$upgrade_patch_file"
+done
 
 echo "[MOTION] copying jy_walk_001 runtime folder"
 mkdir -p "$player_root/motions/jy_walk_001"

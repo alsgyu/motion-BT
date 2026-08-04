@@ -1,0 +1,132 @@
+diff --git a/INHA-Player/src/brain/include/kick.h b/INHA-Player/src/brain/include/kick.h
+index e62c7830..b765cf78 100644
+--- a/INHA-Player/src/brain/include/kick.h
++++ b/INHA-Player/src/brain/include/kick.h
+@@ -162,7 +162,9 @@ private:
+     bool _isDecelerating = false;
+     bool _visionKickStarted = false;
+     bool _pendingRobocupWalk = false;
++    bool _waitingForSoccerMode = false;
+     rclcpp::Time _decelStartTime;
++    rclcpp::Time _lastModeRequestTime;
+     double _decelDurationMs = 500.0;
+     static rclcpp::Time _lastExitTime;
+ 
+diff --git a/INHA-Player/src/brain/src/kick.cpp b/INHA-Player/src/brain/src/kick.cpp
+index f7e30b8e..d980809b 100644
+--- a/INHA-Player/src/brain/src/kick.cpp
++++ b/INHA-Player/src/brain/src/kick.cpp
+@@ -564,6 +564,8 @@ NodeStatus RLVisionKick::onStart()
+     _isDecelerating = false;
+     _visionKickStarted = false;
+     _pendingRobocupWalk = false;
++    _waitingForSoccerMode = false;
++    _lastModeRequestTime = rclcpp::Time(0, 0, RCL_ROS_TIME);
+     brain->data->shouldExitRLVisionKick = false;
+     brain->data->tmImInVisualKick = true;
+     setVisualKickLock(brain, true, _kickMode, _lockDistMax, _lockBallYawTolerance, _lockGoalAngleTolerance);
+@@ -584,6 +586,7 @@ NodeStatus RLVisionKick::onRunning()
+         _isDecelerating = false;
+         _visionKickStarted = false;
+         _pendingRobocupWalk = false;
++        _waitingForSoccerMode = false;
+         clearVisualKickState(brain);
+         recordExitTime();
+         return NodeStatus::SUCCESS;
+@@ -595,6 +598,7 @@ NodeStatus RLVisionKick::onRunning()
+             if (_pendingRobocupWalk) {
+                 brain->client->robocupWalk();
+                 _pendingRobocupWalk = false;
++                _waitingForSoccerMode = false;
+                 clearVisualKickState(brain);
+                 return NodeStatus::SUCCESS;
+             } else if (!_visionKickStarted) {
+@@ -604,6 +608,11 @@ NodeStatus RLVisionKick::onRunning()
+         return NodeStatus::RUNNING;
+     }
+ 
++    if (!_visionKickStarted) {
++        startVisionKick();
++        return NodeStatus::RUNNING;
++    }
++
+     if (_visionKickStarted) {
+         double headMsec = brain->msecsSince(_headScanStartTime);
+         if (headMsec < 300.0) {
+@@ -636,6 +645,7 @@ NodeStatus RLVisionKick::onRunning()
+             _isDecelerating = false;
+             _visionKickStarted = false;
+             _pendingRobocupWalk = false;
++            _waitingForSoccerMode = false;
+             clearVisualKickState(brain);
+             return NodeStatus::SUCCESS;
+         }
+@@ -658,6 +668,7 @@ void RLVisionKick::onHalted()
+     _isDecelerating = false;
+     _visionKickStarted = false;
+     _pendingRobocupWalk = false;
++    _waitingForSoccerMode = false;
+     clearVisualKickState(brain);
+ }
+ 
+@@ -673,14 +684,30 @@ void RLVisionKick::recordExitTime()
+ 
+ void RLVisionKick::startVisionKick()
+ {
+-    std::cout << "Start Kick\n";
+     if (brain->config && brain->config->customMotionEnable) {
+-        brain->client->changeRobocupMode();
++        const bool soccerMode = brain->tree->getEntry<bool>("is_soccer_mode");
++        if (!soccerMode) {
++            const bool shouldRequest =
++                _lastModeRequestTime.nanoseconds() == 0 ||
++                brain->msecsSince(_lastModeRequestTime) > 300.0;
++            if (shouldRequest) {
++                std::cout << "RLKick waiting for kSoccer before VisualKick\n";
++                brain->client->changeRobocupMode();
++                brain->tree->setEntry<string>("robocup_mode_target", "soccer");
++                _lastModeRequestTime = brain->get_clock()->now();
++            }
++            _waitingForSoccerMode = true;
++            brain->tree->setEntry<bool>("visual_kick_command_sent", false);
++            return;
++        }
+     }
++
++    std::cout << "Start Kick\n";
+     brain->client->RLVisionKick(true);
+     _startTime = brain->get_clock()->now();
+     _headScanStartTime = _startTime;
+     _visionKickStarted = true;
++    _waitingForSoccerMode = false;
+     brain->tree->setEntry<bool>("visual_kick_command_sent", true);
+ }
+ 
+diff --git a/INHA-Player/src/brain/src/walk.cpp b/INHA-Player/src/brain/src/walk.cpp
+index 41e68b45..e8fbf36a 100644
+--- a/INHA-Player/src/brain/src/walk.cpp
++++ b/INHA-Player/src/brain/src/walk.cpp
+@@ -55,10 +55,14 @@ NodeStatus RobocupWalk::tick()
+ {
+     // Intended to be wrapped by a RunOnce decorator at behavior-tree startup.
+     if (brain->config->customMotionEnable) {
+-        if (brain->config->customMotionBrainControlsMode) {
++        const bool visualKickActive = brain->tree->getEntry<bool>("visual_kick_active");
++        if (visualKickActive) {
++            brain->client->changeRobocupMode();
++            brain->tree->setEntry<string>("robocup_mode_target", "soccer");
++        } else {
+             brain->client->changeCustomMode();
++            brain->tree->setEntry<string>("robocup_mode_target", "custom_motion");
+         }
+-        brain->tree->setEntry<string>("robocup_mode_target", "custom_motion");
+         return NodeStatus::SUCCESS;
+     }
+ 
+@@ -146,4 +150,4 @@ NodeStatus RobocupModeByDecision::tick()
+ 
+     brain->tree->setEntry<string>("robocup_mode_target", targetMode);
+     return NodeStatus::SUCCESS;
+-}
+\ No newline at end of file
++}
