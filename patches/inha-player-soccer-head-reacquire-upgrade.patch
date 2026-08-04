@@ -1,0 +1,149 @@
+diff --git a/INHA-Player/src/brain/include/kick.h b/INHA-Player/src/brain/include/kick.h
+index 4a170d3b..c4a6d291 100644
+--- a/INHA-Player/src/brain/include/kick.h
++++ b/INHA-Player/src/brain/include/kick.h
+@@ -131,2 +131,4 @@ public:
+             InputPort<double>("soccer_head_reclaim_msec", 350.0, "Time to hold the head down after kSoccer is confirmed before starting VisualKick"),
++            InputPort<double>("soccer_head_reacquire_msec", 2500.0, "Maximum time to scan with the head for a fresh ball detection after kSoccer is confirmed"),
++            InputPort<double>("soccer_head_scan_interval_msec", 180.0, "Interval between head-only scan commands while waiting for fresh ball detection in kSoccer"),
+             InputPort<double>("post_soccer_kick_grace_msec", 700.0, "Time to hold head down and ignore transient ball loss after VisualKick starts from custom motion"),
+@@ -163,2 +165,4 @@ private:
+     double _soccerHeadReclaimMsec = 350.0;
++    double _soccerHeadReacquireMsec = 2500.0;
++    double _soccerHeadScanIntervalMsec = 180.0;
+     double _postSoccerKickGraceMsec = 700.0;
+@@ -172,2 +176,5 @@ private:
+     rclcpp::Time _soccerModeConfirmedTime;
++    rclcpp::Time _lastHeadReacquireTime;
++    int _headReacquireIndex = 0;
++    bool _headReacquireTimeoutLogged = false;
+     double _decelDurationMs = 500.0;
+@@ -177,2 +184,5 @@ private:
+     void startVisionKick();
++    bool hasFreshBallAfterSoccerConfirm() const;
++    void resetSoccerHeadReacquire();
++    void stepSoccerHeadReacquire();
+     void startDecelerate(double durationMs = 500.0);
+diff --git a/INHA-Player/src/brain/src/kick.cpp b/INHA-Player/src/brain/src/kick.cpp
+index c5feb615..06c72261 100644
+--- a/INHA-Player/src/brain/src/kick.cpp
++++ b/INHA-Player/src/brain/src/kick.cpp
+@@ -548,2 +548,4 @@ NodeStatus RLVisionKick::onStart()
+     getInput("soccer_head_reclaim_msec", _soccerHeadReclaimMsec);
++    getInput("soccer_head_reacquire_msec", _soccerHeadReacquireMsec);
++    getInput("soccer_head_scan_interval_msec", _soccerHeadScanIntervalMsec);
+     getInput("post_soccer_kick_grace_msec", _postSoccerKickGraceMsec);
+@@ -554,2 +556,4 @@ NodeStatus RLVisionKick::onStart()
+     _soccerHeadReclaimMsec = std::max(_soccerHeadReclaimMsec, 0.0);
++    _soccerHeadReacquireMsec = std::max(_soccerHeadReacquireMsec, _soccerHeadReclaimMsec);
++    _soccerHeadScanIntervalMsec = std::max(_soccerHeadScanIntervalMsec, 50.0);
+     _postSoccerKickGraceMsec = std::max(_postSoccerKickGraceMsec, 0.0);
+@@ -573,2 +577,3 @@ NodeStatus RLVisionKick::onStart()
+     _soccerModeConfirmedTime = rclcpp::Time(0, 0, RCL_ROS_TIME);
++    resetSoccerHeadReacquire();
+     brain->data->shouldExitRLVisionKick = false;
+@@ -595,2 +600,3 @@ NodeStatus RLVisionKick::onRunning()
+         _soccerModeConfirmedTime = rclcpp::Time(0, 0, RCL_ROS_TIME);
++        resetSoccerHeadReacquire();
+         clearVisualKickState(brain);
+@@ -608,2 +614,3 @@ NodeStatus RLVisionKick::onRunning()
+                 _soccerModeConfirmedTime = rclcpp::Time(0, 0, RCL_ROS_TIME);
++                resetSoccerHeadReacquire();
+                 clearVisualKickState(brain);
+@@ -662,2 +669,3 @@ NodeStatus RLVisionKick::onRunning()
+             _soccerModeConfirmedTime = rclcpp::Time(0, 0, RCL_ROS_TIME);
++            resetSoccerHeadReacquire();
+             clearVisualKickState(brain);
+@@ -686,2 +694,3 @@ void RLVisionKick::onHalted()
+     _soccerModeConfirmedTime = rclcpp::Time(0, 0, RCL_ROS_TIME);
++    resetSoccerHeadReacquire();
+     clearVisualKickState(brain);
+@@ -721,8 +730,19 @@ void RLVisionKick::startVisionKick()
+             if (_soccerModeConfirmedTime.nanoseconds() == 0) {
+-                std::cout << "RLKick kSoccer confirmed; reclaiming head before VisualKick\n";
++                std::cout << "RLKick kSoccer confirmed; head-only ball reacquire before VisualKick\n";
+                 _soccerModeConfirmedTime = brain->get_clock()->now();
++                resetSoccerHeadReacquire();
+             }
+-            brain->client->moveHead(0.7, 0.0);
++            stepSoccerHeadReacquire();
+             brain->tree->setEntry<bool>("visual_kick_command_sent", false);
+-            if (brain->msecsSince(_soccerModeConfirmedTime) < _soccerHeadReclaimMsec) {
++            const double confirmedMsec = brain->msecsSince(_soccerModeConfirmedTime);
++            const bool headReclaimDone = confirmedMsec >= _soccerHeadReclaimMsec;
++            const bool ballReacquired = hasFreshBallAfterSoccerConfirm();
++            if (!headReclaimDone || !ballReacquired) {
++                if (!ballReacquired &&
++                    confirmedMsec >= _soccerHeadReacquireMsec &&
++                    !_headReacquireTimeoutLogged) {
++                    std::cout << "RLKick head-only ball reacquire timed out; giving BT back\n";
++                    _headReacquireTimeoutLogged = true;
++                    brain->data->shouldExitRLVisionKick = true;
++                }
+                 _waitingForSoccerMode = true;
+@@ -741,2 +761,3 @@ void RLVisionKick::startVisionKick()
+     _soccerModeConfirmedTime = rclcpp::Time(0, 0, RCL_ROS_TIME);
++    resetSoccerHeadReacquire();
+     brain->tree->setEntry<bool>("visual_kick_command_sent", true);
+@@ -744,2 +765,61 @@ void RLVisionKick::startVisionKick()
+
++bool RLVisionKick::hasFreshBallAfterSoccerConfirm() const
++{
++    if (!brain->data->ballDetected) {
++        return false;
++    }
++    if (brain->data->ball.timePoint.nanoseconds() == 0) {
++        return true;
++    }
++    if (brain->msecsSince(brain->data->ball.timePoint) > 500.0) {
++        return false;
++    }
++    if (_soccerModeConfirmedTime.nanoseconds() == 0) {
++        return true;
++    }
++    return (brain->data->ball.timePoint - _soccerModeConfirmedTime).nanoseconds() >= -200000000;
++}
++
++void RLVisionKick::resetSoccerHeadReacquire()
++{
++    _lastHeadReacquireTime = rclcpp::Time(0, 0, RCL_ROS_TIME);
++    _headReacquireIndex = 0;
++    _headReacquireTimeoutLogged = false;
++}
++
++void RLVisionKick::stepSoccerHeadReacquire()
++{
++    if (hasFreshBallAfterSoccerConfirm()) {
++        double pitch = brain->data->ball.pitchToRobot;
++        double yaw = brain->data->ball.yawToRobot;
++        if (!std::isfinite(pitch) || pitch <= 0.0) pitch = 0.7;
++        if (!std::isfinite(yaw)) yaw = 0.0;
++        brain->client->moveHead(std::max(pitch, 0.55), yaw);
++        return;
++    }
++
++    const bool shouldSend =
++        _lastHeadReacquireTime.nanoseconds() == 0 ||
++        brain->msecsSince(_lastHeadReacquireTime) >= _soccerHeadScanIntervalMsec;
++    if (!shouldSend) {
++        return;
++    }
++
++    constexpr double scanSequence[][2] = {
++        {0.70, 0.00},
++        {0.65, 0.40},
++        {0.65, 0.00},
++        {0.65, -0.40},
++        {0.35, -0.40},
++        {0.35, 0.00},
++        {0.35, 0.40},
++    };
++    constexpr int scanSequenceSize = sizeof(scanSequence) / sizeof(scanSequence[0]);
++    brain->client->moveHead(
++        scanSequence[_headReacquireIndex][0],
++        scanSequence[_headReacquireIndex][1]);
++    _headReacquireIndex = (_headReacquireIndex + 1) % scanSequenceSize;
++    _lastHeadReacquireTime = brain->get_clock()->now();
++}
++
+ void RLVisionKick::startDecelerate(double durationMs)

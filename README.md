@@ -95,10 +95,17 @@ Example:
 - In custom motion mode, `RLVisionKick` waits until the robot state confirms
   soccer mode before sending `VisualKick(true)`, then the root mode gate returns
   to custom mode after the visual-kick lock clears.
-- After soccer mode is confirmed, `RLVisionKick` reclaims the head for a short
-  window before sending `VisualKick(true)`, then keeps the head down briefly
-  after the kick command so the soccer-mode entry reset does not immediately
-  lose the ball.
+- After soccer mode is confirmed, `RLVisionKick` runs a head-only ball
+  reacquire scan before sending `VisualKick(true)`. It uses a CamFindBall-like
+  low/high pitch and left/center/right yaw sweep while keeping the visual-kick
+  decision active.
+- `VisualKick(true)` is sent only after the head reclaim window has elapsed and
+  a fresh raw ball detection is available again.
+- If the ball is not reacquired within `soccer_head_reacquire_msec`,
+  `RLVisionKick` exits without a blind kick so the BT can fall back to
+  custom-motion find/chase.
+- After the kick command, `RLVisionKick` keeps the head down briefly so the
+  soccer-mode entry reset does not immediately lose the ball again.
 - Before `VisualKick(true)` is sent, the BT holds the visual-kick decision
   briefly so a momentary ball loss during the soccer-mode handoff does not fall
   back to chase/find.
