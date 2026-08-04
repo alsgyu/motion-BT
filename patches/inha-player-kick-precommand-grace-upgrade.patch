@@ -1,0 +1,84 @@
+diff --git a/INHA-Player/src/brain/src/kick.cpp b/INHA-Player/src/brain/src/kick.cpp
+index d980809b..3df93e39 100644
+--- a/INHA-Player/src/brain/src/kick.cpp
++++ b/INHA-Player/src/brain/src/kick.cpp
+@@ -689,2 +689,3 @@ void RLVisionKick::startVisionKick()
+         if (!soccerMode) {
++            brain->client->moveHead(0.7, 0.0);
+             const bool shouldRequest =
+@@ -705,2 +706,3 @@ void RLVisionKick::startVisionKick()
+     std::cout << "Start Kick\n";
++    brain->client->moveHead(0.7, 0.0);
+     brain->client->RLVisionKick(true);
+diff --git a/INHA-Player/src/brain/src/setpiece.cpp b/INHA-Player/src/brain/src/setpiece.cpp
+index 5c606de4..e654e65b 100644
+--- a/INHA-Player/src/brain/src/setpiece.cpp
++++ b/INHA-Player/src/brain/src/setpiece.cpp
+@@ -418,3 +418,3 @@ NodeStatus KickerDecision::tick()
+     const auto visualKickDecisionLockDuration =
+-        rclcpp::Duration::from_seconds(1.5);
++        rclcpp::Duration::from_seconds(brain->config->customMotionEnable ? 3.0 : 1.5);
+     const bool visualKickDecisionLocked =
+@@ -451,12 +451,19 @@ NodeStatus KickerDecision::tick()
+         visualKickCommandSent;
++    const bool visualKickPreCommandGrace =
++        shootVisualKickActive &&
++        !visualKickCommandSent &&
++        !brain->tree->getEntry<bool>("ball_out") &&
++        visualKickDecisionLocked;
+     const bool keepVisualKickDecision =
+-        (visualKickStateActive || lastDecisionVisualKick) &&
+-        canKeepVisualKickForSetpiece &&
+-        iKnowBallPos &&
+-        brain->data->lose_ball == false &&
+-        (visualKickDecisionLocked || ballRange <= visualKickChaseExitRange);
++        visualKickPreCommandGrace ||
++        ((visualKickStateActive || lastDecisionVisualKick) &&
++         canKeepVisualKickForSetpiece &&
++         iKnowBallPos &&
++         brain->data->lose_ball == false &&
++         (visualKickDecisionLocked || ballRange <= visualKickChaseExitRange));
+     const bool shootVisualKickDecisionActive =
+-        visualKickStateActive &&
+-        canKeepVisualKickForSetpiece &&
+-        (visualKickCommandSent || autoVisualKickRangeReady);
++        visualKickPreCommandGrace ||
++        (visualKickStateActive &&
++         canKeepVisualKickForSetpiece &&
++         (visualKickCommandSent || autoVisualKickRangeReady));
+     const bool shouldChaseSideKickPose =
+diff --git a/INHA-Player/src/brain/src/striker_decision.cpp b/INHA-Player/src/brain/src/striker_decision.cpp
+index cd735e36..2d8c094c 100644
+--- a/INHA-Player/src/brain/src/striker_decision.cpp
++++ b/INHA-Player/src/brain/src/striker_decision.cpp
+@@ -325,3 +325,3 @@ NodeStatus LeadStrikerDecision::tick() {
+     const auto visualKickDecisionLockDuration =
+-        rclcpp::Duration::from_seconds(1.5);
++        rclcpp::Duration::from_seconds(brain->config->customMotionEnable ? 3.0 : 1.5);
+     const bool visualKickDecisionLocked =
+@@ -357,11 +357,18 @@ NodeStatus LeadStrikerDecision::tick() {
+         !shootVisualKickInputStillValid;
+-    const bool keepVisualKickDecision =
+-        (visualKickStateActive || lastDecisionVisualKick) &&
+-        iKnowBallPos &&
++    const bool visualKickPreCommandGrace =
++        shootVisualKickActive &&
++        !visualKickCommandSent &&
+         !ballOut &&
+-        brain->data->lose_ball == false &&
+-        (visualKickDecisionLocked || ballRange <= visualKickChaseExitRange);
++        visualKickDecisionLocked;
++    const bool keepVisualKickDecision =
++        visualKickPreCommandGrace ||
++        ((visualKickStateActive || lastDecisionVisualKick) &&
++         iKnowBallPos &&
++         !ballOut &&
++         brain->data->lose_ball == false &&
++         (visualKickDecisionLocked || ballRange <= visualKickChaseExitRange));
+     const bool visualKickDecisionActive =
+-        visualKickStateActive &&
+-        (visualKickCommandSent || autoVisualKickRangeReady);
++        visualKickPreCommandGrace ||
++        (visualKickStateActive &&
++         (visualKickCommandSent || autoVisualKickRangeReady));
+     const bool shouldChaseSideKickPose =

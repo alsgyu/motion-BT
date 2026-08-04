@@ -328,7 +328,7 @@ index 16a95a27..5338e96f 100644
  }
  
 diff --git a/INHA-Player/src/brain/src/kick.cpp b/INHA-Player/src/brain/src/kick.cpp
-index 6f9319bd..d980809b 100644
+index 6f9319bd..3df93e39 100644
 --- a/INHA-Player/src/brain/src/kick.cpp
 +++ b/INHA-Player/src/brain/src/kick.cpp
 @@ -564,6 +564,8 @@ NodeStatus RLVisionKick::onStart()
@@ -384,13 +384,14 @@ index 6f9319bd..d980809b 100644
      clearVisualKickState(brain);
  }
  
-@@ -673,11 +684,30 @@ void RLVisionKick::recordExitTime()
+@@ -673,11 +684,32 @@ void RLVisionKick::recordExitTime()
  
  void RLVisionKick::startVisionKick()
  {
 +    if (brain->config && brain->config->customMotionEnable) {
 +        const bool soccerMode = brain->tree->getEntry<bool>("is_soccer_mode");
 +        if (!soccerMode) {
++            brain->client->moveHead(0.7, 0.0);
 +            const bool shouldRequest =
 +                _lastModeRequestTime.nanoseconds() == 0 ||
 +                brain->msecsSince(_lastModeRequestTime) > 300.0;
@@ -407,6 +408,7 @@ index 6f9319bd..d980809b 100644
 +    }
 +
      std::cout << "Start Kick\n";
++    brain->client->moveHead(0.7, 0.0);
      brain->client->RLVisionKick(true);
      _startTime = brain->get_clock()->now();
      _headScanStartTime = _startTime;
@@ -546,6 +548,94 @@ index 3f69a454..2198dafd 100644
  int RobotClient::crabWalk(double angle, double speed) {
      double vxFactor = brain->config->vxFactor;   // 用于调整 vx, vx *= vxFactor, 以补偿 x, y 方向的速度参数与实际速度比例的偏差, 使运动方向准确
      double yawOffset = brain->config->yawOffset; // 用于补偿定位角度的偏差
+diff --git a/INHA-Player/src/brain/src/setpiece.cpp b/INHA-Player/src/brain/src/setpiece.cpp
+index 5c606de4..e654e65b 100644
+--- a/INHA-Player/src/brain/src/setpiece.cpp
++++ b/INHA-Player/src/brain/src/setpiece.cpp
+@@ -416,7 +416,7 @@ NodeStatus KickerDecision::tick()
+     const bool lastDecisionVisualKick =
+         lastDecision == "auto_visual_kick";
+     const auto visualKickDecisionLockDuration =
+-        rclcpp::Duration::from_seconds(1.5);
++        rclcpp::Duration::from_seconds(brain->config->customMotionEnable ? 3.0 : 1.5);
+     const bool visualKickDecisionLocked =
+         visualKickDecisionLockUntil.nanoseconds() > 0 &&
+         now < visualKickDecisionLockUntil;
+@@ -449,16 +449,23 @@ NodeStatus KickerDecision::tick()
+     const bool canKeepVisualKickForSetpiece =
+         kickDirReady ||
+         visualKickCommandSent;
++    const bool visualKickPreCommandGrace =
++        shootVisualKickActive &&
++        !visualKickCommandSent &&
++        !brain->tree->getEntry<bool>("ball_out") &&
++        visualKickDecisionLocked;
+     const bool keepVisualKickDecision =
+-        (visualKickStateActive || lastDecisionVisualKick) &&
+-        canKeepVisualKickForSetpiece &&
+-        iKnowBallPos &&
+-        brain->data->lose_ball == false &&
+-        (visualKickDecisionLocked || ballRange <= visualKickChaseExitRange);
++        visualKickPreCommandGrace ||
++        ((visualKickStateActive || lastDecisionVisualKick) &&
++         canKeepVisualKickForSetpiece &&
++         iKnowBallPos &&
++         brain->data->lose_ball == false &&
++         (visualKickDecisionLocked || ballRange <= visualKickChaseExitRange));
+     const bool shootVisualKickDecisionActive =
+-        visualKickStateActive &&
+-        canKeepVisualKickForSetpiece &&
+-        (visualKickCommandSent || autoVisualKickRangeReady);
++        visualKickPreCommandGrace ||
++        (visualKickStateActive &&
++         canKeepVisualKickForSetpiece &&
++         (visualKickCommandSent || autoVisualKickRangeReady));
+     const bool shouldChaseSideKickPose =
+         brain->config->get_enable_auto_visual_kick() &&
+         kickDirReady &&
+diff --git a/INHA-Player/src/brain/src/striker_decision.cpp b/INHA-Player/src/brain/src/striker_decision.cpp
+index cd735e36..2d8c094c 100644
+--- a/INHA-Player/src/brain/src/striker_decision.cpp
++++ b/INHA-Player/src/brain/src/striker_decision.cpp
+@@ -323,7 +323,7 @@ NodeStatus LeadStrikerDecision::tick() {
+         lastDecision == "auto_visual_kick" ||
+         lastDecision == "dribble";
+     const auto visualKickDecisionLockDuration =
+-        rclcpp::Duration::from_seconds(1.5);
++        rclcpp::Duration::from_seconds(brain->config->customMotionEnable ? 3.0 : 1.5);
+     const bool visualKickDecisionLocked =
+         visualKickDecisionLockUntil.nanoseconds() > 0 &&
+         now < visualKickDecisionLockUntil;
+@@ -355,15 +355,22 @@ NodeStatus LeadStrikerDecision::tick() {
+         shootVisualKickActive &&
+         visualKickCommandSent &&
+         !shootVisualKickInputStillValid;
+-    const bool keepVisualKickDecision =
+-        (visualKickStateActive || lastDecisionVisualKick) &&
+-        iKnowBallPos &&
++    const bool visualKickPreCommandGrace =
++        shootVisualKickActive &&
++        !visualKickCommandSent &&
+         !ballOut &&
+-        brain->data->lose_ball == false &&
+-        (visualKickDecisionLocked || ballRange <= visualKickChaseExitRange);
++        visualKickDecisionLocked;
++    const bool keepVisualKickDecision =
++        visualKickPreCommandGrace ||
++        ((visualKickStateActive || lastDecisionVisualKick) &&
++         iKnowBallPos &&
++         !ballOut &&
++         brain->data->lose_ball == false &&
++         (visualKickDecisionLocked || ballRange <= visualKickChaseExitRange));
+     const bool visualKickDecisionActive =
+-        visualKickStateActive &&
+-        (visualKickCommandSent || autoVisualKickRangeReady);
++        visualKickPreCommandGrace ||
++        (visualKickStateActive &&
++         (visualKickCommandSent || autoVisualKickRangeReady));
+     const bool shouldChaseSideKickPose =
+         brain->config->get_enable_auto_visual_kick() &&
+         brain->data->tmImLead &&
 diff --git a/INHA-Player/src/brain/src/walk.cpp b/INHA-Player/src/brain/src/walk.cpp
 index d086e1fd..e8fbf36a 100644
 --- a/INHA-Player/src/brain/src/walk.cpp

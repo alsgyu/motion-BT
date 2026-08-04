@@ -95,3 +95,6 @@ Example:
 - In custom motion mode, `RLVisionKick` waits until the robot state confirms
   soccer mode before sending `VisualKick(true)`, then the root mode gate returns
   to custom mode after the visual-kick lock clears.
+- While waiting for soccer mode, `RLVisionKick` keeps the head pitched down and
+  holds the visual-kick decision briefly so a momentary ball loss during the
+  stiff soccer-mode entry does not immediately fall back to chase/find.
