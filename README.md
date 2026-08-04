@@ -56,7 +56,8 @@ source /opt/booster/BoosterRos2Interface/install/setup.bash
 python3 /home/booster/Workspace/INHA-Soccer/INHA-Player/motions/jy_walk_001/booster_deploy_overlay/run_bt_cmd_vel.py \
   --task k1_scratch_walk_001 \
   --checkpoint /home/booster/Workspace/deploy/tasks/scratch/models/JY_walk_001_symmetry_2026-07-30_18-18-57_best_best.pt \
-  --topic /inha/custom_motion/cmd_vel
+  --topic /inha/custom_motion/cmd_vel \
+  --head-topic /inha/custom_motion/head
 ```
 
 Terminal 2: start INHA brain in custom motion mode.
@@ -84,6 +85,10 @@ Example:
 - Default mode is unchanged unless `custom_motion:=true` is passed.
 - With custom motion enabled, `RobotClient::setVelocity()` publishes
   `geometry_msgs/Twist` to `/inha/custom_motion/cmd_vel`.
+- With custom motion enabled, `RobotClient::moveHead()` also publishes
+  `sensor_msgs/JointState` to `/inha/custom_motion/head`.
 - The `booster_deploy` overlay converts that `Twist` into normalized policy
   velocity commands.
+- The overlay keeps the RL gait output for the body and overrides only the head
+  yaw/pitch joint targets from the latest head command.
 - `RLVisionKick` switches back to soccer mode before starting VisualKick.

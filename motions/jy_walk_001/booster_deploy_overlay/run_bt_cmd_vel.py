@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import argparse
+import multiprocessing as mp
 import pkgutil
 import sys
 import threading
@@ -23,6 +24,11 @@ class CmdVelControlConfig:
     max_vyaw: float
     timeout_sec: float
     require_first_cmd: bool
+    head_topic: str
+    head_yaw_index: int
+    head_pitch_index: int
+    head_timeout_sec: float
+    head_override: bool
 
 
 class CmdVelControlService:
@@ -33,13 +39,21 @@ class CmdVelControlService:
         self._lock = threading.Lock()
         self._node = None
         self._sub = None
+        self._head_sub = None
         self._last_cmd_time = 0.0
         self._vx = 0.0
         self._vy = 0.0
         self._vyaw = 0.0
+        self._head_lock = mp.Lock()
+        self._head_pitch = mp.Value("d", 0.0)
+        self._head_yaw = mp.Value("d", 0.0)
+        self._head_last_cmd_time = mp.Value("d", 0.0)
 
     def get_operation_hint(self) -> str:
-        return f"Listening for BT velocity commands on {self.config.topic}"
+        hint = f"Listening for BT velocity commands on {self.config.topic}"
+        if self.config.head_override:
+            hint += f" and head commands on {self.config.head_topic}"
+        return hint
 
     def get_custom_mode_operation_hint(self) -> str:
         return "Auto-starting custom mode for BT control."
@@ -72,6 +86,21 @@ class CmdVelControlService:
         with self._lock:
             return self._normalize(self._fresh_or_zero(self._vyaw), self.config.max_vyaw)
 
+    def get_head_override(self):
+        if not self.config.head_override:
+            return None
+
+        with self._head_lock:
+            last_cmd_time = self._head_last_cmd_time.value
+            if last_cmd_time <= 0.0:
+                return None
+            if (
+                self.config.head_timeout_sec > 0.0
+                and time.monotonic() - last_cmd_time > self.config.head_timeout_sec
+            ):
+                return None
+            return self._head_pitch.value, self._head_yaw.value
+
     def close(self):
         try:
             if self._node is not None:
@@ -80,6 +109,7 @@ class CmdVelControlService:
             pass
         self._node = None
         self._sub = None
+        self._head_sub = None
 
     def _ensure_node(self):
         if self._node is not None:
@@ -87,6 +117,7 @@ class CmdVelControlService:
 
         import rclpy
         from geometry_msgs.msg import Twist
+        from sensor_msgs.msg import JointState
 
         if not rclpy.ok():
             return
@@ -99,6 +130,14 @@ class CmdVelControlService:
             10,
         )
         print(f"[bt_cmd_vel] subscribed: {self.config.topic}")
+        if self.config.head_override:
+            self._head_sub = self._node.create_subscription(
+                JointState,
+                self.config.head_topic,
+                self._head_callback,
+                10,
+            )
+            print(f"[bt_head] subscribed: {self.config.head_topic}")
 
     def _spin_once(self):
         import rclpy
@@ -113,6 +152,32 @@ class CmdVelControlService:
             self._vy = float(msg.linear.y)
             self._vyaw = float(msg.angular.z)
             self._last_cmd_time = time.monotonic()
+
+    def _head_callback(self, msg):
+        yaw = None
+        pitch = None
+
+        if len(msg.name) == len(msg.position):
+            for name, position in zip(msg.name, msg.position):
+                lower_name = name.lower()
+                if "head" not in lower_name:
+                    continue
+                if "yaw" in lower_name:
+                    yaw = float(position)
+                elif "pitch" in lower_name:
+                    pitch = float(position)
+
+        if yaw is None and len(msg.position) >= 1:
+            yaw = float(msg.position[0])
+        if pitch is None and len(msg.position) >= 2:
+            pitch = float(msg.position[1])
+        if yaw is None or pitch is None:
+            return
+
+        with self._head_lock:
+            self._head_yaw.value = yaw
+            self._head_pitch.value = pitch
+            self._head_last_cmd_time.value = time.monotonic()
 
     def _has_fresh_command(self) -> bool:
         self._spin_once()
@@ -146,6 +211,30 @@ def import_all_tasks():
         __import__(mod_info.name)
 
 
+def patch_head_override(controller_mod):
+    original_ctrl_step = controller_mod.BoosterRobotController.ctrl_step
+
+    def ctrl_step_with_head_override(self, dof_targets):
+        head_cmd = self.portal.remoteControlService.get_head_override()
+        if head_cmd is None:
+            return original_ctrl_step(self, dof_targets)
+
+        pitch, yaw = head_cmd
+        yaw_index = self.portal.remoteControlService.config.head_yaw_index
+        pitch_index = self.portal.remoteControlService.config.head_pitch_index
+        if yaw_index >= self.robot.num_joints or pitch_index >= self.robot.num_joints:
+            return original_ctrl_step(self, dof_targets)
+
+        dof_targets = dof_targets.clone()
+        if yaw_index >= 0:
+            dof_targets[yaw_index] = yaw
+        if pitch_index >= 0:
+            dof_targets[pitch_index] = pitch
+        return original_ctrl_step(self, dof_targets)
+
+    controller_mod.BoosterRobotController.ctrl_step = ctrl_step_with_head_override
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(
         description="Run booster_deploy with velocity commands from INHA BT."
@@ -158,6 +247,11 @@ def main() -> int:
     parser.add_argument("--webots", action="store_true", default=False)
     parser.add_argument("--cmd-timeout", type=float, default=0.5)
     parser.add_argument("--require-first-cmd", action="store_true", default=False)
+    parser.add_argument("--head-topic", default="/inha/custom_motion/head")
+    parser.add_argument("--head-yaw-index", type=int, default=0)
+    parser.add_argument("--head-pitch-index", type=int, default=1)
+    parser.add_argument("--head-timeout", type=float, default=0.0)
+    parser.add_argument("--disable-head-override", action="store_true", default=False)
     args = parser.parse_args()
 
     sys.path.append(".")
@@ -186,6 +280,11 @@ def main() -> int:
         max_vyaw=float(task_cfg.vel_command.vyaw_max),
         timeout_sec=args.cmd_timeout,
         require_first_cmd=args.require_first_cmd,
+        head_topic=args.head_topic,
+        head_yaw_index=args.head_yaw_index,
+        head_pitch_index=args.head_pitch_index,
+        head_timeout_sec=args.head_timeout,
+        head_override=not args.disable_head_override,
     )
 
     class BoundCmdVelControlService(CmdVelControlService):
@@ -203,6 +302,7 @@ def main() -> int:
     from booster_deploy.controllers import booster_robot_controller as controller_mod
 
     controller_mod.RemoteControlService = BoundCmdVelControlService
+    patch_head_override(controller_mod)
 
     with controller_mod.BoosterRobotPortal(task_cfg, use_sim_time=args.webots) as portal:
         portal.run()

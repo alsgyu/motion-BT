@@ -4,6 +4,7 @@ description: BT velocity bridge profile for JY walk 001.
 brain:
   custom_motion_enable: true
   cmd_vel_topic: /inha/custom_motion/cmd_vel
+  head_topic: /inha/custom_motion/head
   publish_sdk_move: false
   require_subscriber: true
   brain_controls_mode: false

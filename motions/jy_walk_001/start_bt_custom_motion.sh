@@ -13,5 +13,6 @@ cd "$player_root"
 exec ./scripts/start.sh "$field_name" \
   custom_motion:=true \
   custom_motion_topic:=/inha/custom_motion/cmd_vel \
+  custom_motion_head_topic:=/inha/custom_motion/head \
   custom_motion_require_subscriber:=true \
   "$@"

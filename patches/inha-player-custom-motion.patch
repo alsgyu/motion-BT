@@ -1,4 +1,5 @@
 diff --git a/INHA-Player/src/brain/CMakeLists.txt b/INHA-Player/src/brain/CMakeLists.txt
+index bc87a087..32e40fc7 100644
 --- a/INHA-Player/src/brain/CMakeLists.txt
 +++ b/INHA-Player/src/brain/CMakeLists.txt
 @@ -111,7 +111,7 @@ include_directories(${CMAKE_CURRENT_BINARY_DIR}/rosidl_generator_cpp)
@@ -11,6 +12,7 @@ diff --git a/INHA-Player/src/brain/CMakeLists.txt b/INHA-Player/src/brain/CMakeL
  target_include_directories(brain_node PUBLIC
    $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
 diff --git a/INHA-Player/src/brain/behavior_trees/game.xml b/INHA-Player/src/brain/behavior_trees/game.xml
+index 7b6a4dee..3eecb78e 100644
 --- a/INHA-Player/src/brain/behavior_trees/game.xml
 +++ b/INHA-Player/src/brain/behavior_trees/game.xml
 @@ -20,7 +20,7 @@
@@ -23,15 +25,17 @@ diff --git a/INHA-Player/src/brain/behavior_trees/game.xml b/INHA-Player/src/bra
                  </ReactiveSequence>
                  
 diff --git a/INHA-Player/src/brain/config/config.yaml b/INHA-Player/src/brain/config/config.yaml
+index 256ed77a..c24ae639 100644
 --- a/INHA-Player/src/brain/config/config.yaml
 +++ b/INHA-Player/src/brain/config/config.yaml
-@@ -27,6 +27,13 @@ brain_node:
+@@ -27,6 +27,14 @@ brain_node:
        vy_limit: 0.4
        vtheta_limit: 2.0  # TurnOnSpot 때문에 1.2 -> 1.6으로 올렸는데 나중에 문제 있으면 수정, brain vtheta_limit도 1.0 -> 1.6 조정
  
 +    custom_motion:
 +      enable: false
 +      cmd_vel_topic: "/inha/custom_motion/cmd_vel"
++      head_topic: "/inha/custom_motion/head"
 +      publish_sdk_move: false
 +      require_subscriber: false
 +      brain_controls_mode: false
@@ -40,14 +44,16 @@ diff --git a/INHA-Player/src/brain/config/config.yaml b/INHA-Player/src/brain/co
        ball_confidence_threshold: 50.0 # 공 인식 신뢰도 임계값
        ball_memory_timeout: 5.0 # 공의 위치를 얼마나 많은 시간동안 기억할지 정하는 파라미터
 diff --git a/INHA-Player/src/brain/include/brain_config.h b/INHA-Player/src/brain/include/brain_config.h
+index dedf0385..6f2452b6 100644
 --- a/INHA-Player/src/brain/include/brain_config.h
 +++ b/INHA-Player/src/brain/include/brain_config.h
-@@ -231,6 +231,12 @@ public:
+@@ -231,6 +231,13 @@ public:
      double vxFactor; //crabWalk에 사용
      double yawOffset;    
  
 +    bool customMotionEnable = false;
 +    string customMotionCmdVelTopic = "/inha/custom_motion/cmd_vel";
++    string customMotionHeadTopic = "/inha/custom_motion/head";
 +    bool customMotionPublishSdkMove = false;
 +    bool customMotionRequireSubscriber = false;
 +    bool customMotionBrainControlsMode = false;
@@ -56,9 +62,10 @@ diff --git a/INHA-Player/src/brain/include/brain_config.h b/INHA-Player/src/brai
      double robotOdomFactorXPositive = 1.0; // body-frame odom x >= 0 보정
      double robotOdomFactorXNegative = 1.0; // body-frame odom x < 0 보정
 diff --git a/INHA-Player/src/brain/include/robot_client.h b/INHA-Player/src/brain/include/robot_client.h
+index 43572dfe..092fadc9 100644
 --- a/INHA-Player/src/brain/include/robot_client.h
 +++ b/INHA-Player/src/brain/include/robot_client.h
-@@ -3,8 +3,10 @@
+@@ -3,8 +3,11 @@
  #include <cstddef>
  #include <iostream>
  #include <string>
@@ -66,10 +73,11 @@ diff --git a/INHA-Player/src/brain/include/robot_client.h b/INHA-Player/src/brai
  #include <rerun.hpp>
  
 +#include "geometry_msgs/msg/twist.hpp"
++#include "sensor_msgs/msg/joint_state.hpp"
  #include "booster_interface/srv/rpc_service.hpp"
  #include "booster_interface/msg/booster_api_req_msg.hpp"
  #include "booster_msgs/msg/rpc_req_msg.hpp"
-@@ -27,6 +29,7 @@ public:
+@@ -27,6 +30,7 @@ public:
      RobotClient(Brain* argBrain) : brain(argBrain) {}
  
      void init();
@@ -77,7 +85,7 @@ diff --git a/INHA-Player/src/brain/include/robot_client.h b/INHA-Player/src/brai
  
      /**
       * @brief 
-@@ -122,6 +125,11 @@ public:
+@@ -122,6 +126,11 @@ public:
       */
      int changeRobocupMode();
  
@@ -89,21 +97,25 @@ diff --git a/INHA-Player/src/brain/include/robot_client.h b/INHA-Player/src/brai
      /**
       * @brief Switch to normal walking mode without soccer gait.
       */
-@@ -153,7 +161,10 @@ public:
+@@ -153,7 +162,13 @@ public:
  
  private:
      int call(booster_interface::msg::BoosterApiReqMsg msg);
 +    int publishCustomMotionVelocity(double x, double y, double theta);
++    int publishCustomMotionHead(double pitch, double yaw);
      rclcpp::Publisher<booster_msgs::msg::RpcReqMsg>::SharedPtr publisher;
 +    rclcpp::Publisher<geometry_msgs::msg::Twist>::SharedPtr customMotionPublisher;
++    rclcpp::Publisher<sensor_msgs::msg::JointState>::SharedPtr customMotionHeadPublisher;
 +    std::string customMotionCmdVelTopic;
++    std::string customMotionHeadTopic;
      Brain *brain;
      double _vx, _vy, _vtheta;
      rclcpp::Time _lastCmdTime;
 diff --git a/INHA-Player/src/brain/launch/launch.py b/INHA-Player/src/brain/launch/launch.py
+index e6e420e8..1b3b02b1 100644
 --- a/INHA-Player/src/brain/launch/launch.py
 +++ b/INHA-Player/src/brain/launch/launch.py
-@@ -55,6 +55,26 @@ def handle_configuration(context, *args, **kwargs):
+@@ -55,6 +55,30 @@ def handle_configuration(context, *args, **kwargs):
      if disableCom in ['true', 'True', '1']:
          config['communication.enable'] = False
  
@@ -114,6 +126,10 @@ diff --git a/INHA-Player/src/brain/launch/launch.py b/INHA-Player/src/brain/laun
 +    customMotionTopic = context.perform_substitution(LaunchConfiguration('custom_motion_topic'))
 +    if customMotionTopic != '':
 +        config['custom_motion.cmd_vel_topic'] = customMotionTopic
++
++    customMotionHeadTopic = context.perform_substitution(LaunchConfiguration('custom_motion_head_topic'))
++    if customMotionHeadTopic != '':
++        config['custom_motion.head_topic'] = customMotionHeadTopic
 +
 +    customMotionPublishSdkMove = context.perform_substitution(LaunchConfiguration('custom_motion_publish_sdk_move'))
 +    if customMotionPublishSdkMove in ['true', 'True', '1']:
@@ -130,7 +146,7 @@ diff --git a/INHA-Player/src/brain/launch/launch.py b/INHA-Player/src/brain/laun
      parameter_files = [config_file]
      if os.path.isfile(config_local_file):
          parameter_files.append(config_local_file)
-@@ -106,5 +126,30 @@ def generate_launch_description():
+@@ -106,5 +130,35 @@ def generate_launch_description():
              default_value='false',
              description='통신 기능을 강제로 비활성화'
          ),
@@ -143,6 +159,11 @@ diff --git a/INHA-Player/src/brain/launch/launch.py b/INHA-Player/src/brain/laun
 +            'custom_motion_topic',
 +            default_value='/inha/custom_motion/cmd_vel',
 +            description='geometry_msgs/Twist topic consumed by the custom motion runner'
++        ),
++        DeclareLaunchArgument(
++            'custom_motion_head_topic',
++            default_value='/inha/custom_motion/head',
++            description='sensor_msgs/JointState topic consumed by the custom motion runner for head control'
 +        ),
 +        DeclareLaunchArgument(
 +            'custom_motion_publish_sdk_move',
@@ -162,14 +183,16 @@ diff --git a/INHA-Player/src/brain/launch/launch.py b/INHA-Player/src/brain/laun
          OpaqueFunction(function=handle_configuration) # handle_configuration 함수로 전달하여 추가 설정을 처리
      ])
 diff --git a/INHA-Player/src/brain/src/brain.cpp b/INHA-Player/src/brain/src/brain.cpp
+index e3db3e58..bcdf5b33 100644
 --- a/INHA-Player/src/brain/src/brain.cpp
 +++ b/INHA-Player/src/brain/src/brain.cpp
-@@ -122,6 +122,12 @@ Brain::Brain() : rclcpp::Node("brain_node", rclcpp::NodeOptions().allow_undeclar
+@@ -122,6 +122,13 @@ Brain::Brain() : rclcpp::Node("brain_node", rclcpp::NodeOptions().allow_undeclar
    declare_parameter<double>("robot.vy_limit", 0.4);
    declare_parameter<double>("robot.vtheta_limit", 2.0);
  
 +  declare_parameter<bool>("custom_motion.enable", false);
 +  declare_parameter<string>("custom_motion.cmd_vel_topic", "/inha/custom_motion/cmd_vel");
++  declare_parameter<string>("custom_motion.head_topic", "/inha/custom_motion/head");
 +  declare_parameter<bool>("custom_motion.publish_sdk_move", false);
 +  declare_parameter<bool>("custom_motion.require_subscriber", false);
 +  declare_parameter<bool>("custom_motion.brain_controls_mode", false);
@@ -177,22 +200,26 @@ diff --git a/INHA-Player/src/brain/src/brain.cpp b/INHA-Player/src/brain/src/bra
    declare_parameter<double>("robot.robot_height", 1.0);
    declare_parameter<double>("robot.odom_factor", 1.0);
    declare_parameter<double>("robot.odom_factor_x_positive", -1.0);
-@@ -701,6 +707,11 @@ void Brain::loadConfig() {
+@@ -701,6 +708,12 @@ void Brain::loadConfig() {
    get_parameter("robot.vx_limit", config->vxLimit);
    get_parameter("robot.vy_limit", config->vyLimit);
    get_parameter("robot.vtheta_limit", config->vthetaLimit);
 +  get_parameter("custom_motion.enable", config->customMotionEnable);
 +  get_parameter("custom_motion.cmd_vel_topic", config->customMotionCmdVelTopic);
++  get_parameter("custom_motion.head_topic", config->customMotionHeadTopic);
 +  get_parameter("custom_motion.publish_sdk_move", config->customMotionPublishSdkMove);
 +  get_parameter("custom_motion.require_subscriber", config->customMotionRequireSubscriber);
 +  get_parameter("custom_motion.brain_controls_mode", config->customMotionBrainControlsMode);
  
    // 전략 관련 파라미터
    get_parameter("strategy.ball_confidence_threshold", config->ballConfidenceThreshold); // 공 탐지 신뢰도 임계값
-@@ -1227,16 +1238,29 @@ void Brain::robotStatesCallback(const booster_interface::msg::RobotStatesMsg::Sh
+@@ -1225,19 +1238,32 @@ void Brain::pubKickMsg() {
+ }
+ 
  void Brain::robotStatesCallback(const booster_interface::msg::RobotStatesMsg::SharedPtr msg){
--    constexpr int32_t SOCCER_MODE = 4;
--
++    constexpr int32_t CUSTOM_MODE = 3;
+     constexpr int32_t SOCCER_MODE = 4;
+ 
 -    if (msg->current_mode != SOCCER_MODE) { // 4 - soccer mode 
 -        tree->setEntry<bool>("is_soccer_mode", false);
 -        return;
@@ -204,10 +231,6 @@ diff --git a/INHA-Player/src/brain/src/brain.cpp b/INHA-Player/src/brain/src/bra
 -
 -    if (robot_states_subscriber_) {
 -        robot_states_subscriber_.reset();
--    }
-+    constexpr int32_t CUSTOM_MODE = 3;
-+    constexpr int32_t SOCCER_MODE = 4;
-+
 +    const bool soccerMode = msg->current_mode == SOCCER_MODE;
 +    const bool customMotionMode =
 +        config && config->customMotionEnable && msg->current_mode == CUSTOM_MODE;
@@ -231,9 +254,10 @@ diff --git a/INHA-Player/src/brain/src/brain.cpp b/INHA-Player/src/brain/src/bra
 +                  << " motion_ready=" << motionModeReady
 +                  << std::endl;
 +        lastMode = msg->current_mode;
-+    }
+     }
  }
-@@ -2509,6 +2533,18 @@ Brain::parametersCallback(const std::vector<rclcpp::Parameter> &parameters) {
+ 
+@@ -2509,6 +2535,22 @@ Brain::parametersCallback(const std::vector<rclcpp::Parameter> &parameters) {
      else if (name == "local_planner.vel_est_heading_median_enable") config->lpVelEstHeadingMedianEnable = param.as_bool();
      else if (name == "local_planner.v_x_rotate_theta") config->lpVxRotateTheta = param.as_double();
  
@@ -245,6 +269,10 @@ diff --git a/INHA-Player/src/brain/src/brain.cpp b/INHA-Player/src/brain/src/bra
 +      config->customMotionCmdVelTopic = param.as_string();
 +      if (client) client->configureCustomMotionPublisher();
 +    }
++    else if (name == "custom_motion.head_topic") {
++      config->customMotionHeadTopic = param.as_string();
++      if (client) client->configureCustomMotionPublisher();
++    }
 +    else if (name == "custom_motion.publish_sdk_move") config->customMotionPublishSdkMove = param.as_bool();
 +    else if (name == "custom_motion.require_subscriber") config->customMotionRequireSubscriber = param.as_bool();
 +    else if (name == "custom_motion.brain_controls_mode") config->customMotionBrainControlsMode = param.as_bool();
@@ -253,15 +281,17 @@ diff --git a/INHA-Player/src/brain/src/brain.cpp b/INHA-Player/src/brain/src/bra
      else if (name == "communication.unicast_interval_ms") config->communicationUnicastIntervalMs = param.as_int();
  
 diff --git a/INHA-Player/src/brain/src/brain_config.cpp b/INHA-Player/src/brain/src/brain_config.cpp
+index 8e5f614a..3fed2a60 100644
 --- a/INHA-Player/src/brain/src/brain_config.cpp
 +++ b/INHA-Player/src/brain/src/brain_config.cpp
-@@ -261,6 +261,13 @@ void BrainConfig::print(ostream &os) {
+@@ -261,6 +261,14 @@ void BrainConfig::print(ostream &os) {
    os << "    vyLimit = " << vyLimit << endl;
    os << "    vthetaLimit = " << vthetaLimit << endl;
    os << "----------------------------------------" << endl;
 +  os << "CustomMotion:" << endl;
 +  os << "    enable = " << customMotionEnable << endl;
 +  os << "    cmdVelTopic = " << customMotionCmdVelTopic << endl;
++  os << "    headTopic = " << customMotionHeadTopic << endl;
 +  os << "    publishSdkMove = " << customMotionPublishSdkMove << endl;
 +  os << "    requireSubscriber = " << customMotionRequireSubscriber << endl;
 +  os << "    brainControlsMode = " << customMotionBrainControlsMode << endl;
@@ -270,6 +300,7 @@ diff --git a/INHA-Player/src/brain/src/brain_config.cpp b/INHA-Player/src/brain/
    os << "    ballConfidenceThreshold = " << ballConfidenceThreshold << endl;
    os << "----------------------------------------" << endl;
 diff --git a/INHA-Player/src/brain/src/brain_tree.cpp b/INHA-Player/src/brain/src/brain_tree.cpp
+index 16a95a27..5338e96f 100644
 --- a/INHA-Player/src/brain/src/brain_tree.cpp
 +++ b/INHA-Player/src/brain/src/brain_tree.cpp
 @@ -158,6 +158,9 @@ void BrainTree::initEntry(){
@@ -283,6 +314,7 @@ diff --git a/INHA-Player/src/brain/src/brain_tree.cpp b/INHA-Player/src/brain/sr
  }
  
 diff --git a/INHA-Player/src/brain/src/kick.cpp b/INHA-Player/src/brain/src/kick.cpp
+index 6f9319bd..f7e30b8e 100644
 --- a/INHA-Player/src/brain/src/kick.cpp
 +++ b/INHA-Player/src/brain/src/kick.cpp
 @@ -674,6 +674,9 @@ void RLVisionKick::recordExitTime()
@@ -296,9 +328,10 @@ diff --git a/INHA-Player/src/brain/src/kick.cpp b/INHA-Player/src/brain/src/kick
      _startTime = brain->get_clock()->now();
      _headScanStartTime = _startTime;
 diff --git a/INHA-Player/src/brain/src/robot_client.cpp b/INHA-Player/src/brain/src/robot_client.cpp
+index 3f69a454..2198dafd 100644
 --- a/INHA-Player/src/brain/src/robot_client.cpp
 +++ b/INHA-Player/src/brain/src/robot_client.cpp
-@@ -10,6 +10,24 @@
+@@ -10,6 +10,37 @@
  void RobotClient::init()
  {
      publisher = brain->create_publisher<booster_msgs::msg::RpcReqMsg>("LocoApiTopicReq", 10);
@@ -308,8 +341,12 @@ diff --git a/INHA-Player/src/brain/src/robot_client.cpp b/INHA-Player/src/brain/
 +void RobotClient::configureCustomMotionPublisher()
 +{
 +    std::string topic = "/inha/custom_motion/cmd_vel";
++    std::string headTopic = "/inha/custom_motion/head";
 +    if (brain->config && !brain->config->customMotionCmdVelTopic.empty()) {
 +        topic = brain->config->customMotionCmdVelTopic;
++    }
++    if (brain->config && !brain->config->customMotionHeadTopic.empty()) {
++        headTopic = brain->config->customMotionHeadTopic;
 +    }
 +
 +    if (!customMotionPublisher || topic != customMotionCmdVelTopic) {
@@ -320,10 +357,30 @@ diff --git a/INHA-Player/src/brain/src/robot_client.cpp b/INHA-Player/src/brain/
 +        std::cout << "RobotClient::customMotion cmd_vel topic: "
 +                  << customMotionCmdVelTopic << std::endl;
 +    }
++
++    if (!customMotionHeadPublisher || headTopic != customMotionHeadTopic) {
++        customMotionHeadTopic = headTopic;
++        customMotionHeadPublisher = brain->create_publisher<sensor_msgs::msg::JointState>(
++            customMotionHeadTopic,
++            rclcpp::QoS(1).reliable());
++        std::cout << "RobotClient::customMotion head topic: "
++                  << customMotionHeadTopic << std::endl;
++    }
  }
  
  int RobotClient::call(booster_interface::msg::BoosterApiReqMsg msg)
-@@ -80,6 +98,13 @@ int RobotClient::changeRobocupMode()
+@@ -39,6 +70,10 @@ int RobotClient::moveHead(double pitch, double yaw)
+     //            : rerun::TextLogLevel::Info;
+     // brain->log->log("debug/move_head", rerun::TextLog(format("pitch: %.2f, yaw: %.2f", pitch, yaw)).with_level(level));
+ 
++    if (brain->config && brain->config->customMotionEnable) {
++        publishCustomMotionHead(pitch, yaw);
++    }
++
+     return call(booster_interface::CreateRotateHeadMsg(pitch, yaw));
+ }
+ 
+@@ -80,6 +115,13 @@ int RobotClient::changeRobocupMode()
  
  }
  
@@ -337,7 +394,7 @@ diff --git a/INHA-Player/src/brain/src/robot_client.cpp b/INHA-Player/src/brain/
  int RobotClient::changeWalkingMode()
  {
      std::cout << "RobotClient::changeWalkingMode switch to kWalking (soccer off)" << std::endl;
-@@ -179,9 +204,45 @@ int RobotClient::setVelocity(double x, double y, double theta, bool applyMinX, b
+@@ -179,9 +221,63 @@ int RobotClient::setVelocity(double x, double y, double theta, bool applyMinX, b
      if (fabs(_vx) > 1e-3 || fabs(_vy) > 1e-3 || fabs(_vtheta) > 1e-3) _lastNonZeroCmdTime = brain->get_clock()->now();
      brain->log->log("RobotClient/setVelocity_out",
         rerun::TextLog(format("vx: %.2f  vy: %.2f  vtheta: %.2f", x, y, theta)));
@@ -380,10 +437,29 @@ diff --git a/INHA-Player/src/brain/src/robot_client.cpp b/INHA-Player/src/brain/
 +    return 0;
 +}
 +
++int RobotClient::publishCustomMotionHead(double pitch, double yaw)
++{
++    if (!customMotionHeadPublisher) {
++        configureCustomMotionPublisher();
++    }
++
++    if (!customMotionHeadPublisher) {
++        return -1;
++    }
++
++    sensor_msgs::msg::JointState msg;
++    msg.header.stamp = brain->get_clock()->now();
++    msg.name = {"AAHead_yaw", "Head_pitch"};
++    msg.position = {yaw, pitch};
++    customMotionHeadPublisher->publish(msg);
++    return 0;
++}
++
  int RobotClient::crabWalk(double angle, double speed) {
      double vxFactor = brain->config->vxFactor;   // 用于调整 vx, vx *= vxFactor, 以补偿 x, y 方向的速度参数与实际速度比例的偏差, 使运动方向准确
      double yawOffset = brain->config->yawOffset; // 用于补偿定位角度的偏差
 diff --git a/INHA-Player/src/brain/src/walk.cpp b/INHA-Player/src/brain/src/walk.cpp
+index d086e1fd..41e68b45 100644
 --- a/INHA-Player/src/brain/src/walk.cpp
 +++ b/INHA-Player/src/brain/src/walk.cpp
 @@ -54,6 +54,14 @@ NodeStatus StepOnSpot::tick()
