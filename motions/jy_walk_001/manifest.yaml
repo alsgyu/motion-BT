@@ -1,0 +1,21 @@
+name: jy_walk_001
+description: BT velocity bridge profile for JY walk 001.
+
+brain:
+  custom_motion_enable: true
+  cmd_vel_topic: /inha/custom_motion/cmd_vel
+  publish_sdk_move: false
+  require_subscriber: true
+  brain_controls_mode: false
+
+booster_deploy:
+  repo_path: /home/booster/Workspace/deploy
+  task_hint: walk_001
+  task_config_hint: /home/booster/Workspace/deploy/tasks/scratch/walk_001.py
+  checkpoint_path: /home/booster/Workspace/deploy/tasks/scratch/models/JY_walk_001_symmetry_2026-07-30_18-18-57_best_best.pt
+  runner: booster_deploy_overlay/run_bt_cmd_vel.py
+
+notes:
+  - Start the booster_deploy runner before starting brain in custom motion mode.
+  - Keep publish_sdk_move false when the external policy owns locomotion.
+  - Use brain_controls_mode only after the deploy runner is already publishing joint_ctrl.
