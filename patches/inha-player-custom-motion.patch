@@ -16,6 +16,86 @@ index 7b6a4dee..3eecb78e 100644
 -                <ReactiveSequence _while="!is_soccer_mode" name="EnterSoccerMode">
 +                <ReactiveSequence _while="!motion_mode_ready" name="EnterMotionMode">
                      <RobocupWalk />
+diff --git a/INHA-Player/src/brain/behavior_trees/subtrees/lead_striker.xml b/INHA-Player/src/brain/behavior_trees/subtrees/lead_striker.xml
+index 15071635..5ce5e950 100644
+--- a/INHA-Player/src/brain/behavior_trees/subtrees/lead_striker.xml
++++ b/INHA-Player/src/brain/behavior_trees/subtrees/lead_striker.xml
+@@ -53,6 +53,6 @@
+                   auto_visual_kick_enter_range="1.0"
+-                  kick_dir_back_margin="1.0"
+-                  kick_dir_front_margin="0.4"
++                  kick_dir_back_margin="0.55"
++                  kick_dir_front_margin="0.15"
+                   kick_dir_front_soft_margin="0.15"
+-                  auto_visual_kick_relaxed_lateral_tolerance="0.40"
++                  auto_visual_kick_relaxed_lateral_tolerance="0.25"
+                   auto_visual_kick_close_range="0.65"
+@@ -86,5 +86,5 @@
+                   dist="0.7"
+-                  safe_dist="0.6"
+-                  target_back_angle_deg="20.0"
+-                  side_target_back_angle_max_deg="40.0"
++                  safe_dist="0.5"
++                  target_back_angle_deg="15.0"
++                  side_target_back_angle_max_deg="30.0"
+                   side_target_back_angle_start_margin_m="1.0"
+@@ -119,2 +119,2 @@
+    </BehaviorTree>
+-</root>
+\ No newline at end of file
++</root>
+diff --git a/INHA-Player/src/brain/behavior_trees/subtrees/setpiece.xml b/INHA-Player/src/brain/behavior_trees/subtrees/setpiece.xml
+index cdef05f9..687e417a 100644
+--- a/INHA-Player/src/brain/behavior_trees/subtrees/setpiece.xml
++++ b/INHA-Player/src/brain/behavior_trees/subtrees/setpiece.xml
+@@ -24,5 +24,5 @@
+                     <CalcKickDir cross_threshold="0.4"/>
+-                    <KickerDecision decision_out="{decision}" decision_in="{decision}" chase_threshold="1.0" auto_visual_kick_enter_range="1.2" kick_dir_back_margin="0.95" kick_dir_front_margin="0.0" />
++                    <KickerDecision decision_out="{decision}" decision_in="{decision}" chase_threshold="1.0" auto_visual_kick_enter_range="1.2" kick_dir_back_margin="0.55" kick_dir_front_margin="0.0" />
+                     <SubTree ID="FindBall" _while="decision=='find'" _autoremap="true" />
+-                    <Chase _while="decision == 'chase'" vx_limit="1.3" vy_limit="0.5" vtheta_limit="1.2" dist="0.7" safe_dist="0.8" target_back_angle_deg="20.0" side_switch_hysteresis="0.20" face_ball_start_dist="0.30" face_ball_full_dist="0.08" min_abs_vx="0.35" min_abs_vx_until_ball_range="0.90" setpiece_boundary_guard="true" />
++                    <Chase _while="decision == 'chase'" vx_limit="1.3" vy_limit="0.5" vtheta_limit="1.2" dist="0.7" safe_dist="0.55" target_back_angle_deg="15.0" side_switch_hysteresis="0.20" face_ball_start_dist="0.30" face_ball_full_dist="0.08" min_abs_vx="0.35" min_abs_vx_until_ball_range="0.90" setpiece_boundary_guard="true" />
+                     <RLVisionKick
+@@ -88,5 +88,5 @@
+                 <ReactiveSequence _while="setpiece_rank == 1" name="Indirect_Free_Kick_Kicker">
+-                    <KickerDecision decision_out="{decision}" decision_in="{decision}" chase_threshold="1.0" auto_visual_kick_enter_range="1.2" kick_dir_back_margin="0.95" kick_dir_front_margin="0.0" setpiece_kick_target_found="{setpiece_kick_target_found}" setpiece_kick_dir_locked="{setpiece_kick_dir_locked}" />
++                    <KickerDecision decision_out="{decision}" decision_in="{decision}" chase_threshold="1.0" auto_visual_kick_enter_range="1.2" kick_dir_back_margin="0.55" kick_dir_front_margin="0.0" setpiece_kick_target_found="{setpiece_kick_target_found}" setpiece_kick_dir_locked="{setpiece_kick_dir_locked}" />
+                     <SubTree ID="FindBall" _while="decision=='find'" _autoremap="true" />
+-                    <Chase _while="decision == 'chase'" vx_limit="1.3" vy_limit="0.5" vtheta_limit="1.2" dist="0.7" safe_dist="0.8" target_back_angle_deg="20.0" side_switch_hysteresis="0.20" face_ball_start_dist="0.30" face_ball_full_dist="0.08" min_abs_vx="0.35" min_abs_vx_until_ball_range="0.90" setpiece_boundary_guard="true" />
++                    <Chase _while="decision == 'chase'" vx_limit="1.3" vy_limit="0.5" vtheta_limit="1.2" dist="0.7" safe_dist="0.55" target_back_angle_deg="15.0" side_switch_hysteresis="0.20" face_ball_start_dist="0.30" face_ball_full_dist="0.08" min_abs_vx="0.35" min_abs_vx_until_ball_range="0.90" setpiece_boundary_guard="true" />
+                     <RLVisionKick
+@@ -160,5 +160,5 @@
+                     <ReactiveSequence _while="setpiece_rank == 1" name="Penalty_Kick_Kicker">
+-                        <KickerDecision decision_out="{decision}" decision_in="{decision}" chase_threshold="1.0" auto_visual_kick_enter_range="1.2" kick_dir_back_margin="0.95" kick_dir_front_margin="0.0" />
++                        <KickerDecision decision_out="{decision}" decision_in="{decision}" chase_threshold="1.0" auto_visual_kick_enter_range="1.2" kick_dir_back_margin="0.55" kick_dir_front_margin="0.0" />
+                         <SubTree ID="FindBall" _while="decision=='find'" _autoremap="true" />
+-                        <Chase _while="decision == 'chase'" vx_limit="1.3" vy_limit="0.5" vtheta_limit="1.2" dist="0.7" safe_dist="0.8" target_back_angle_deg="20.0" side_switch_hysteresis="0.20" face_ball_start_dist="0.30" face_ball_full_dist="0.08" min_abs_vx="0.35" min_abs_vx_until_ball_range="0.90" setpiece_boundary_guard="true" />
++                        <Chase _while="decision == 'chase'" vx_limit="1.3" vy_limit="0.5" vtheta_limit="1.2" dist="0.7" safe_dist="0.55" target_back_angle_deg="15.0" side_switch_hysteresis="0.20" face_ball_start_dist="0.30" face_ball_full_dist="0.08" min_abs_vx="0.35" min_abs_vx_until_ball_range="0.90" setpiece_boundary_guard="true" />
+                         <RLVisionKick
+@@ -216,5 +216,5 @@
+                 <ReactiveSequence _while="setpiece_rank == 1" name="Corner_Kick_Kicker">
+-                    <KickerDecision decision_out="{decision}" decision_in="{decision}" chase_threshold="1.0" auto_visual_kick_enter_range="1.2" kick_dir_back_margin="0.95" kick_dir_front_margin="0.0" setpiece_kick_target_found="{setpiece_kick_target_found}" setpiece_kick_dir_locked="{setpiece_kick_dir_locked}" />
++                    <KickerDecision decision_out="{decision}" decision_in="{decision}" chase_threshold="1.0" auto_visual_kick_enter_range="1.2" kick_dir_back_margin="0.55" kick_dir_front_margin="0.0" setpiece_kick_target_found="{setpiece_kick_target_found}" setpiece_kick_dir_locked="{setpiece_kick_dir_locked}" />
+                     <SubTree ID="FindBall" _while="decision=='find'" _autoremap="true" />
+-                    <Chase _while="decision == 'chase'" vx_limit="1.0" vy_limit="0.5" vtheta_limit="1.2" dist="0.7" safe_dist="0.8" target_back_angle_deg="20.0" side_switch_hysteresis="0.20" face_ball_start_dist="0.30" face_ball_full_dist="0.08" min_abs_vx="0.35" min_abs_vx_until_ball_range="0.90" setpiece_boundary_guard="true" />
++                    <Chase _while="decision == 'chase'" vx_limit="1.0" vy_limit="0.5" vtheta_limit="1.2" dist="0.7" safe_dist="0.55" target_back_angle_deg="15.0" side_switch_hysteresis="0.20" face_ball_start_dist="0.30" face_ball_full_dist="0.08" min_abs_vx="0.35" min_abs_vx_until_ball_range="0.90" setpiece_boundary_guard="true" />
+                     <RLVisionKick
+@@ -274,5 +274,5 @@
+                 <ReactiveSequence _while="(current_role == 'goal_keeper' &amp;&amp; goalkeeper_alive) || (!goalkeeper_alive &amp;&amp; setpiece_rank == 1)" name="Goal_Kick_Kicker">
+-                    <KickerDecision decision_out="{decision}" decision_in="{decision}" chase_threshold="1.0" auto_visual_kick_enter_range="1.2" kick_dir_back_margin="0.95" kick_dir_front_margin="0.0" />
++                    <KickerDecision decision_out="{decision}" decision_in="{decision}" chase_threshold="1.0" auto_visual_kick_enter_range="1.2" kick_dir_back_margin="0.55" kick_dir_front_margin="0.0" />
+                     <SubTree ID="FindBall" _while="decision=='find'" _autoremap="true" />
+-                    <Chase _while="decision == 'chase'" vx_limit="1.3" vy_limit="0.5" vtheta_limit="1.2" dist="0.7" safe_dist="0.8" target_back_angle_deg="20.0" side_switch_hysteresis="0.20" face_ball_start_dist="0.30" face_ball_full_dist="0.08" min_abs_vx="0.35" min_abs_vx_until_ball_range="0.90" setpiece_boundary_guard="true" />
++                    <Chase _while="decision == 'chase'" vx_limit="1.3" vy_limit="0.5" vtheta_limit="1.2" dist="0.7" safe_dist="0.55" target_back_angle_deg="15.0" side_switch_hysteresis="0.20" face_ball_start_dist="0.30" face_ball_full_dist="0.08" min_abs_vx="0.35" min_abs_vx_until_ball_range="0.90" setpiece_boundary_guard="true" />
+                     <RLVisionKick _while="decision == 'auto_visual_kick'" min_msec_kick="1500" max_msec_kick="5000" range="1.0" power_switch_dist="10.0" power_far="5.2" power_near="5.2" exit_decelerate_msec="500" />
+@@ -321,5 +321,5 @@
+                 <ReactiveSequence _while="setpiece_rank == 1" name="Throw_In_Kicker">
+-                    <KickerDecision decision_out="{decision}" decision_in="{decision}" chase_threshold="1.0" auto_visual_kick_enter_range="1.2" kick_dir_back_margin="0.95" kick_dir_front_margin="0.0" setpiece_kick_target_found="{setpiece_kick_target_found}" setpiece_kick_dir_locked="{setpiece_kick_dir_locked}" />
++                    <KickerDecision decision_out="{decision}" decision_in="{decision}" chase_threshold="1.0" auto_visual_kick_enter_range="1.2" kick_dir_back_margin="0.55" kick_dir_front_margin="0.0" setpiece_kick_target_found="{setpiece_kick_target_found}" setpiece_kick_dir_locked="{setpiece_kick_dir_locked}" />
+                     <SubTree ID="FindBall" _while="decision=='find'" _autoremap="true" />
+-                    <Chase _while="decision == 'chase'" vx_limit="1.0" vy_limit="0.5" vtheta_limit="1.2" dist="0.7" safe_dist="0.8" target_back_angle_deg="20.0" side_switch_hysteresis="0.20" face_ball_start_dist="0.30" face_ball_full_dist="0.08" min_abs_vx="0.35" min_abs_vx_until_ball_range="0.90" setpiece_boundary_guard="true" />
++                    <Chase _while="decision == 'chase'" vx_limit="1.0" vy_limit="0.5" vtheta_limit="1.2" dist="0.7" safe_dist="0.55" target_back_angle_deg="15.0" side_switch_hysteresis="0.20" face_ball_start_dist="0.30" face_ball_full_dist="0.08" min_abs_vx="0.35" min_abs_vx_until_ball_range="0.90" setpiece_boundary_guard="true" />
+                     <RLVisionKick _while="decision == 'auto_visual_kick'" min_msec_kick="1500" max_msec_kick="5000" range="1.0" power_switch_dist="10.0" power_far="2.0" power_near="2.0" exit_decelerate_msec="500" />
 diff --git a/INHA-Player/src/brain/config/config.yaml b/INHA-Player/src/brain/config/config.yaml
 index 256ed77a..6944bdc6 100644
 --- a/INHA-Player/src/brain/config/config.yaml
@@ -507,10 +587,15 @@ index 6f9319bd..12c33ca1 100644
 +
  void RLVisionKick::startDecelerate(double durationMs)
 diff --git a/INHA-Player/src/brain/src/robot_client.cpp b/INHA-Player/src/brain/src/robot_client.cpp
-index 3f69a454..7a29ddfd 100644
+index 3f69a454..c1e91176 100644
 --- a/INHA-Player/src/brain/src/robot_client.cpp
 +++ b/INHA-Player/src/brain/src/robot_client.cpp
-@@ -12,2 +12,33 @@ void RobotClient::init()
+@@ -1,2 +1,4 @@
+ #include <cmath>
++#include <chrono>
++#include <thread>
+ #include "brain.h"
+@@ -12,2 +14,33 @@ void RobotClient::init()
      publisher = brain->create_publisher<booster_msgs::msg::RpcReqMsg>("LocoApiTopicReq", 10);
 +    configureCustomMotionPublisher();
 +}
@@ -544,35 +629,33 @@ index 3f69a454..7a29ddfd 100644
 +                  << customMotionHeadTopic << std::endl;
 +    }
  }
-@@ -41,2 +72,6 @@ int RobotClient::moveHead(double pitch, double yaw)
+@@ -41,2 +74,6 @@ int RobotClient::moveHead(double pitch, double yaw)
  
 +    if (brain->config && brain->config->customMotionEnable) {
 +        publishCustomMotionHead(pitch, yaw);
 +    }
 +
      return call(booster_interface::CreateRotateHeadMsg(pitch, yaw));
-@@ -78,3 +113,6 @@ int RobotClient::changeRobocupMode()
+@@ -78,4 +115,17 @@ int RobotClient::changeRobocupMode()
  
 -    return call(booster_interface::CreateChangeModeMsg(booster::robot::RobotMode::kSoccer));
 +    stopMotionForModeChange();
 +    const int ret = call(booster_interface::CreateChangeModeMsg(booster::robot::RobotMode::kSoccer));
 +    stopMotionForModeChange();
 +    return ret;
- 
-@@ -82,2 +120,12 @@ int RobotClient::changeRobocupMode()
- 
++
++}
++
 +int RobotClient::changeCustomMode()
 +{
 +    std::cout << "RobotClient::changeCustomMode switch to kCustom" << std::endl;
-+
+ 
 +    stopMotionForModeChange();
 +    const int ret = call(booster_interface::CreateChangeModeMsg(booster::robot::RobotMode::kCustom));
 +    stopMotionForModeChange();
 +    return ret;
-+}
-+
- int RobotClient::changeWalkingMode()
-@@ -88,3 +136,6 @@ int RobotClient::changeWalkingMode()
+ }
+@@ -88,3 +138,6 @@ int RobotClient::changeWalkingMode()
      const auto walkingMode = static_cast<booster::robot::RobotMode>(2);
 -    return call(booster_interface::CreateChangeModeMsg(walkingMode));
 +    stopMotionForModeChange();
@@ -580,7 +663,7 @@ index 3f69a454..7a29ddfd 100644
 +    stopMotionForModeChange();
 +    return ret;
  }
-@@ -107,3 +158,6 @@ int RobotClient::enterDamping()
+@@ -107,3 +160,6 @@ int RobotClient::enterDamping()
  {
 -    return call(booster_interface::CreateChangeModeMsg(booster::robot::RobotMode::kDamping));
 +    stopMotionForModeChange();
@@ -588,7 +671,7 @@ index 3f69a454..7a29ddfd 100644
 +    stopMotionForModeChange();
 +    return ret;
  }
-@@ -181,2 +235,13 @@ int RobotClient::setVelocity(double x, double y, double theta, bool applyMinX, b
+@@ -181,2 +237,13 @@ int RobotClient::setVelocity(double x, double y, double theta, bool applyMinX, b
         rerun::TextLog(format("vx: %.2f  vy: %.2f  vtheta: %.2f", x, y, theta)));
 +
 +    if (brain->config && brain->config->customMotionEnable) {
@@ -602,7 +685,7 @@ index 3f69a454..7a29ddfd 100644
 +    }
 +
      return call(booster_interface::CreateMoveMsg(x, y, theta));
-@@ -184,2 +249,59 @@ int RobotClient::setVelocity(double x, double y, double theta, bool applyMinX, b
+@@ -184,2 +251,90 @@ int RobotClient::setVelocity(double x, double y, double theta, bool applyMinX, b
  
 +int RobotClient::publishCustomMotionVelocity(double x, double y, double theta)
 +{
@@ -631,16 +714,47 @@ index 3f69a454..7a29ddfd 100644
 +
 +int RobotClient::stopMotionForModeChange()
 +{
-+    _vx = 0.0;
-+    _vy = 0.0;
-+    _vtheta = 0.0;
-+    _lastCmdTime = brain->get_clock()->now();
++    const double startVx = _vx;
++    const double startVy = _vy;
++    const double startVtheta = _vtheta;
++    const bool shouldRamp =
++        std::fabs(startVx) > 1e-3 ||
++        std::fabs(startVy) > 1e-3 ||
++        std::fabs(startVtheta) > 1e-3;
++    constexpr double scales[] = {0.6, 0.3, 0.0};
++    int ret = 0;
 +
-+    if (brain->config && brain->config->customMotionEnable) {
-+        publishCustomMotionVelocity(0.0, 0.0, 0.0);
++    for (double scale : scales) {
++        if (!shouldRamp && scale > 0.0) {
++            continue;
++        }
++
++        const double vx = startVx * scale;
++        const double vy = startVy * scale;
++        const double vtheta = startVtheta * scale;
++        _vx = vx;
++        _vy = vy;
++        _vtheta = vtheta;
++        _lastCmdTime = brain->get_clock()->now();
++
++        if (brain->config && brain->config->customMotionEnable) {
++            const int customRet = publishCustomMotionVelocity(vx, vy, vtheta);
++            if (ret == 0 && customRet != 0) {
++                ret = customRet;
++            }
++        }
++
++        const int sdkRet = call(booster_interface::CreateMoveMsg(vx, vy, vtheta));
++        if (ret == 0 && sdkRet != 0) {
++            ret = sdkRet;
++        }
++
++        if (shouldRamp && scale > 0.0) {
++            std::this_thread::sleep_for(std::chrono::milliseconds(70));
++        }
 +    }
 +
-+    return call(booster_interface::CreateMoveMsg(0.0, 0.0, 0.0));
++    return ret;
 +}
 +
 +int RobotClient::publishCustomMotionHead(double pitch, double yaw)
@@ -663,9 +777,14 @@ index 3f69a454..7a29ddfd 100644
 +
  int RobotClient::crabWalk(double angle, double speed) {
 diff --git a/INHA-Player/src/brain/src/setpiece.cpp b/INHA-Player/src/brain/src/setpiece.cpp
-index 5c606de4..e654e65b 100644
+index 5c606de4..01340661 100644
 --- a/INHA-Player/src/brain/src/setpiece.cpp
 +++ b/INHA-Player/src/brain/src/setpiece.cpp
+@@ -332,3 +332,3 @@ NodeStatus KickerDecision::tick()
+     const double kickDirFrontMargin = std::max(0.0, tuning.kickDirFrontMargin);
+-    const double kickTargetLateralTolerance = 0.25;
++    const double kickTargetLateralTolerance = 0.20;
+     const double kickTargetForwardError =
 @@ -418,3 +418,3 @@ NodeStatus KickerDecision::tick()
      const auto visualKickDecisionLockDuration =
 -        rclcpp::Duration::from_seconds(1.5);
@@ -700,9 +819,14 @@ index 5c606de4..e654e65b 100644
 +         (visualKickCommandSent || autoVisualKickRangeReady));
      const bool shouldChaseSideKickPose =
 diff --git a/INHA-Player/src/brain/src/striker_decision.cpp b/INHA-Player/src/brain/src/striker_decision.cpp
-index cd735e36..2d8c094c 100644
+index cd735e36..bbf25fc2 100644
 --- a/INHA-Player/src/brain/src/striker_decision.cpp
 +++ b/INHA-Player/src/brain/src/striker_decision.cpp
+@@ -169,3 +169,3 @@ NodeStatus LeadStrikerDecision::tick() {
+         std::max(kickDirFrontMargin, std::max(0.0, tuning.kickDirFrontSoftMargin));
+-    const double kickTargetLateralTolerance = 0.25;
++    const double kickTargetLateralTolerance = 0.20;
+     const double relaxedLateralTolerance =
 @@ -325,3 +325,3 @@ NodeStatus LeadStrikerDecision::tick() {
      const auto visualKickDecisionLockDuration =
 -        rclcpp::Duration::from_seconds(1.5);

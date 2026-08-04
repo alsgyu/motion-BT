@@ -13,6 +13,7 @@ upgrade_patch_files=(
   "$repo_root/patches/inha-player-soccer-head-reclaim-upgrade.patch"
   "$repo_root/patches/inha-player-soccer-head-reacquire-upgrade.patch"
   "$repo_root/patches/inha-player-mode-stop-and-last-known-upgrade.patch"
+  "$repo_root/patches/inha-player-smooth-stop-tight-kick-align-upgrade.patch"
 )
 
 if [ ! -d "$player_root/src/brain" ]; then
@@ -80,6 +81,13 @@ upgrade_patch_already_integrated() {
       grep -q "stopMotionForModeChange" "$player_root/src/brain/src/robot_client.cpp" &&
         grep -q "_headReacquireUsedLastKnown" "$player_root/src/brain/include/kick.h" &&
         grep -q "filterball.pitchToRobot" "$player_root/src/brain/src/kick.cpp"
+      ;;
+    inha-player-smooth-stop-tight-kick-align-upgrade.patch)
+      grep -q "std::chrono::milliseconds(70)" "$player_root/src/brain/src/robot_client.cpp" &&
+        grep -q 'kick_dir_back_margin="0.55"' "$player_root/src/brain/behavior_trees/subtrees/lead_striker.xml" &&
+        grep -q 'safe_dist="0.55" target_back_angle_deg="15.0"' "$player_root/src/brain/behavior_trees/subtrees/setpiece.xml" &&
+        grep -q "kickTargetLateralTolerance = 0.20" "$player_root/src/brain/src/striker_decision.cpp" &&
+        grep -q "kickTargetLateralTolerance = 0.20" "$player_root/src/brain/src/setpiece.cpp"
       ;;
     *)
       return 1

@@ -94,7 +94,8 @@ Example:
   `geometry_msgs/Twist` to `/inha/custom_motion/cmd_vel`.
 - With custom motion enabled, `RobotClient::moveHead()` also publishes
   `sensor_msgs/JointState` to `/inha/custom_motion/head`.
-- Every robot mode change sends zero velocity to both the custom motion
+- Every robot mode change ramps the last commanded velocity down through
+  `60% -> 30% -> 0%`, then sends zero velocity to both the custom motion
   `cmd_vel` bridge and the Booster SDK move API before and after the mode
   request.
 - The `booster_deploy` overlay converts that `Twist` into normalized policy
@@ -111,6 +112,9 @@ Example:
   decision active.
 - Before that sweep, it first points the head at the last known filtered ball
   direction when `ball_location_known` is still available.
+- KickDir-based chase alignment uses a smaller behind-ball target and tighter
+  lateral tolerance, so the robot does not circle as far around the ball before
+  entering `RLVisionKick`.
 - `VisualKick(true)` is sent only after the head reclaim window has elapsed and
   a fresh raw ball detection is available again.
 - If the ball is not reacquired within `soccer_head_reacquire_msec`,
