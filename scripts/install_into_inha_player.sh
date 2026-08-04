@@ -10,6 +10,7 @@ upgrade_patch_files=(
   "$repo_root/patches/inha-player-head-motion-upgrade.patch"
   "$repo_root/patches/inha-player-kick-mode-upgrade.patch"
   "$repo_root/patches/inha-player-kick-precommand-grace-upgrade.patch"
+  "$repo_root/patches/inha-player-soccer-head-reclaim-upgrade.patch"
 )
 
 if [ ! -d "$player_root/src/brain" ]; then
@@ -61,6 +62,11 @@ upgrade_patch_already_integrated() {
       grep -q "visualKickPreCommandGrace" "$player_root/src/brain/src/striker_decision.cpp" &&
         grep -q "visualKickPreCommandGrace" "$player_root/src/brain/src/setpiece.cpp" &&
         grep -q "moveHead(0.7, 0.0)" "$player_root/src/brain/src/kick.cpp"
+      ;;
+    inha-player-soccer-head-reclaim-upgrade.patch)
+      grep -q "soccer_head_reclaim_msec" "$player_root/src/brain/include/kick.h" &&
+        grep -q "RLKick kSoccer confirmed; reclaiming head before VisualKick" "$player_root/src/brain/src/kick.cpp" &&
+        grep -q "customMotionPostKickGrace" "$player_root/src/brain/src/kick.cpp"
       ;;
     *)
       return 1
