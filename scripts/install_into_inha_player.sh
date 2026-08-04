@@ -12,6 +12,7 @@ upgrade_patch_files=(
   "$repo_root/patches/inha-player-kick-precommand-grace-upgrade.patch"
   "$repo_root/patches/inha-player-soccer-head-reclaim-upgrade.patch"
   "$repo_root/patches/inha-player-soccer-head-reacquire-upgrade.patch"
+  "$repo_root/patches/inha-player-mode-stop-and-last-known-upgrade.patch"
 )
 
 if [ ! -d "$player_root/src/brain" ]; then
@@ -74,6 +75,11 @@ upgrade_patch_already_integrated() {
       grep -q "soccer_head_reacquire_msec" "$player_root/src/brain/include/kick.h" &&
         grep -q "stepSoccerHeadReacquire" "$player_root/src/brain/src/kick.cpp" &&
         grep -q "head-only ball reacquire before VisualKick" "$player_root/src/brain/src/kick.cpp"
+      ;;
+    inha-player-mode-stop-and-last-known-upgrade.patch)
+      grep -q "stopMotionForModeChange" "$player_root/src/brain/src/robot_client.cpp" &&
+        grep -q "_headReacquireUsedLastKnown" "$player_root/src/brain/include/kick.h" &&
+        grep -q "filterball.pitchToRobot" "$player_root/src/brain/src/kick.cpp"
       ;;
     *)
       return 1

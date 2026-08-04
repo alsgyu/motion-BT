@@ -32,6 +32,13 @@ cd /home/booster/Workspace
 git clone https://github.com/alsgyu/motion-BT.git
 ```
 
+If it is already cloned, update it instead:
+
+```bash
+cd /home/booster/Workspace/motion-BT
+git pull
+```
+
 Apply the INHA brain patch and copy the motion runtime folder:
 
 ```bash
@@ -87,6 +94,9 @@ Example:
   `geometry_msgs/Twist` to `/inha/custom_motion/cmd_vel`.
 - With custom motion enabled, `RobotClient::moveHead()` also publishes
   `sensor_msgs/JointState` to `/inha/custom_motion/head`.
+- Every robot mode change sends zero velocity to both the custom motion
+  `cmd_vel` bridge and the Booster SDK move API before and after the mode
+  request.
 - The `booster_deploy` overlay converts that `Twist` into normalized policy
   velocity commands.
 - The overlay keeps the RL gait output for the body and overrides only the head
@@ -99,6 +109,8 @@ Example:
   reacquire scan before sending `VisualKick(true)`. It uses a CamFindBall-like
   low/high pitch and left/center/right yaw sweep while keeping the visual-kick
   decision active.
+- Before that sweep, it first points the head at the last known filtered ball
+  direction when `ball_location_known` is still available.
 - `VisualKick(true)` is sent only after the head reclaim window has elapsed and
   a fresh raw ball detection is available again.
 - If the ball is not reacquired within `soccer_head_reacquire_msec`,
