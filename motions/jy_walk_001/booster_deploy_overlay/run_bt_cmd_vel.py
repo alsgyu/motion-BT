@@ -245,7 +245,7 @@ def main() -> int:
     parser.add_argument("--device", default="cpu")
     parser.add_argument("--net", default="127.0.0.1")
     parser.add_argument("--webots", action="store_true", default=False)
-    parser.add_argument("--cmd-timeout", type=float, default=0.5)
+    parser.add_argument("--cmd-timeout", type=float, default=1.0)
     parser.add_argument("--require-first-cmd", action="store_true", default=False)
     parser.add_argument("--head-topic", default="/inha/custom_motion/head")
     parser.add_argument("--head-yaw-index", type=int, default=0)

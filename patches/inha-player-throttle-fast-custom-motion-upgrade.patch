@@ -1,0 +1,358 @@
+diff --git a/INHA-Player/src/brain/config/config.yaml b/INHA-Player/src/brain/config/config.yaml
+index 6944bdc6..cd745586 100644
+--- a/INHA-Player/src/brain/config/config.yaml
++++ b/INHA-Player/src/brain/config/config.yaml
+@@ -36,2 +36,7 @@ brain_node:
+       brain_controls_mode: false
++      cmd_vel_update_interval_msec: 500.0
++      velocity_scale_x: 1.35
++      velocity_scale_y: 1.35
++      velocity_scale_theta: 1.35
++      soccer_mode_stop_settle_msec: 350.0
+ 
+diff --git a/INHA-Player/src/brain/include/brain_config.h b/INHA-Player/src/brain/include/brain_config.h
+index 6f2452b6..b9862e27 100644
+--- a/INHA-Player/src/brain/include/brain_config.h
++++ b/INHA-Player/src/brain/include/brain_config.h
+@@ -239,2 +239,7 @@ public:
+     bool customMotionBrainControlsMode = false;
++    double customMotionCmdVelUpdateIntervalMsec = 500.0;
++    double customMotionVelocityScaleX = 1.35;
++    double customMotionVelocityScaleY = 1.35;
++    double customMotionVelocityScaleTheta = 1.35;
++    double customMotionSoccerModeStopSettleMsec = 350.0;
+ 
+diff --git a/INHA-Player/src/brain/include/kick.h b/INHA-Player/src/brain/include/kick.h
+index 2abb862c..2ed4970f 100644
+--- a/INHA-Player/src/brain/include/kick.h
++++ b/INHA-Player/src/brain/include/kick.h
+@@ -130,5 +130,5 @@ public:
+             InputPort<double>("exit_decelerate_msec", 500.0, "Stop/settle time before returning to robocup walk after RLVisionKick exit"),
+-            InputPort<double>("soccer_head_reclaim_msec", 350.0, "Time to hold the head down after kSoccer is confirmed before starting VisualKick"),
+-            InputPort<double>("soccer_head_reacquire_msec", 2500.0, "Maximum time to scan with the head for a fresh ball detection after kSoccer is confirmed"),
+-            InputPort<double>("soccer_head_scan_interval_msec", 180.0, "Interval between head-only scan commands while waiting for fresh ball detection in kSoccer"),
++            InputPort<double>("soccer_head_reclaim_msec", 120.0, "Time to hold the head down after kSoccer is confirmed before starting VisualKick"),
++            InputPort<double>("soccer_head_reacquire_msec", 700.0, "Maximum time to scan with the head for a fresh ball detection after kSoccer is confirmed"),
++            InputPort<double>("soccer_head_scan_interval_msec", 100.0, "Interval between head-only scan commands while waiting for fresh ball detection in kSoccer"),
+             InputPort<double>("post_soccer_kick_grace_msec", 700.0, "Time to hold head down and ignore transient ball loss after VisualKick starts from custom motion"),
+@@ -164,5 +164,5 @@ private:
+     double _exitDecelerateMsec = 500.0;
+-    double _soccerHeadReclaimMsec = 350.0;
+-    double _soccerHeadReacquireMsec = 2500.0;
+-    double _soccerHeadScanIntervalMsec = 180.0;
++    double _soccerHeadReclaimMsec = 120.0;
++    double _soccerHeadReacquireMsec = 700.0;
++    double _soccerHeadScanIntervalMsec = 100.0;
+     double _postSoccerKickGraceMsec = 700.0;
+diff --git a/INHA-Player/src/brain/include/robot_client.h b/INHA-Player/src/brain/include/robot_client.h
+index 3aa4ee24..fcc4a38b 100644
+--- a/INHA-Player/src/brain/include/robot_client.h
++++ b/INHA-Player/src/brain/include/robot_client.h
+@@ -166,3 +166,3 @@ private:
+     int publishCustomMotionHead(double pitch, double yaw);
+-    int stopMotionForModeChange();
++    int stopMotionForModeChange(double finalSettleMsec = 0.0);
+     rclcpp::Publisher<booster_msgs::msg::RpcReqMsg>::SharedPtr publisher;
+@@ -173,5 +173,6 @@ private:
+     Brain *brain;
+-    double _vx, _vy, _vtheta;
+-    rclcpp::Time _lastCmdTime;
+-    rclcpp::Time _lastNonZeroCmdTime;
++    double _vx = 0.0, _vy = 0.0, _vtheta = 0.0;
++    rclcpp::Time _lastCmdTime{0, 0, RCL_ROS_TIME};
++    rclcpp::Time _lastNonZeroCmdTime{0, 0, RCL_ROS_TIME};
++    rclcpp::Time _lastCustomMotionVelocityPublishTime{0, 0, RCL_ROS_TIME};
+ };
+diff --git a/INHA-Player/src/brain/launch/launch.py b/INHA-Player/src/brain/launch/launch.py
+index 1b3b02b1..3d38131f 100644
+--- a/INHA-Player/src/brain/launch/launch.py
++++ b/INHA-Player/src/brain/launch/launch.py
+@@ -81,2 +81,22 @@ def handle_configuration(context, *args, **kwargs):
+ 
++    customMotionCmdVelUpdateIntervalMsec = context.perform_substitution(LaunchConfiguration('custom_motion_cmd_vel_update_interval_msec'))
++    if customMotionCmdVelUpdateIntervalMsec != '':
++        config['custom_motion.cmd_vel_update_interval_msec'] = float(customMotionCmdVelUpdateIntervalMsec)
++
++    customMotionVelocityScaleX = context.perform_substitution(LaunchConfiguration('custom_motion_velocity_scale_x'))
++    if customMotionVelocityScaleX != '':
++        config['custom_motion.velocity_scale_x'] = float(customMotionVelocityScaleX)
++
++    customMotionVelocityScaleY = context.perform_substitution(LaunchConfiguration('custom_motion_velocity_scale_y'))
++    if customMotionVelocityScaleY != '':
++        config['custom_motion.velocity_scale_y'] = float(customMotionVelocityScaleY)
++
++    customMotionVelocityScaleTheta = context.perform_substitution(LaunchConfiguration('custom_motion_velocity_scale_theta'))
++    if customMotionVelocityScaleTheta != '':
++        config['custom_motion.velocity_scale_theta'] = float(customMotionVelocityScaleTheta)
++
++    customMotionSoccerModeStopSettleMsec = context.perform_substitution(LaunchConfiguration('custom_motion_soccer_mode_stop_settle_msec'))
++    if customMotionSoccerModeStopSettleMsec != '':
++        config['custom_motion.soccer_mode_stop_settle_msec'] = float(customMotionSoccerModeStopSettleMsec)
++
+     parameter_files = [config_file]
+@@ -162,2 +182,27 @@ def generate_launch_description():
+         ),
++        DeclareLaunchArgument(
++            'custom_motion_cmd_vel_update_interval_msec',
++            default_value='500.0',
++            description='Minimum interval between non-zero custom motion cmd_vel updates'
++        ),
++        DeclareLaunchArgument(
++            'custom_motion_velocity_scale_x',
++            default_value='1.35',
++            description='Scale x velocity commands before publishing to custom motion'
++        ),
++        DeclareLaunchArgument(
++            'custom_motion_velocity_scale_y',
++            default_value='1.35',
++            description='Scale y velocity commands before publishing to custom motion'
++        ),
++        DeclareLaunchArgument(
++            'custom_motion_velocity_scale_theta',
++            default_value='1.35',
++            description='Scale yaw velocity commands before publishing to custom motion'
++        ),
++        DeclareLaunchArgument(
++            'custom_motion_soccer_mode_stop_settle_msec',
++            default_value='350.0',
++            description='Extra zero-velocity settle time before switching from custom motion to soccer mode'
++        ),
+         OpaqueFunction(function=handle_configuration) # handle_configuration 함수로 전달하여 추가 설정을 처리
+diff --git a/INHA-Player/src/brain/src/brain.cpp b/INHA-Player/src/brain/src/brain.cpp
+index 7e65ecd6..774b35e4 100644
+--- a/INHA-Player/src/brain/src/brain.cpp
++++ b/INHA-Player/src/brain/src/brain.cpp
+@@ -130,2 +130,7 @@ Brain::Brain() : rclcpp::Node("brain_node", rclcpp::NodeOptions().allow_undeclar
+   declare_parameter<bool>("custom_motion.brain_controls_mode", false);
++  declare_parameter<double>("custom_motion.cmd_vel_update_interval_msec", 500.0);
++  declare_parameter<double>("custom_motion.velocity_scale_x", 1.35);
++  declare_parameter<double>("custom_motion.velocity_scale_y", 1.35);
++  declare_parameter<double>("custom_motion.velocity_scale_theta", 1.35);
++  declare_parameter<double>("custom_motion.soccer_mode_stop_settle_msec", 350.0);
+ 
+@@ -716,2 +721,7 @@ void Brain::loadConfig() {
+   get_parameter("custom_motion.brain_controls_mode", config->customMotionBrainControlsMode);
++  get_parameter("custom_motion.cmd_vel_update_interval_msec", config->customMotionCmdVelUpdateIntervalMsec);
++  get_parameter("custom_motion.velocity_scale_x", config->customMotionVelocityScaleX);
++  get_parameter("custom_motion.velocity_scale_y", config->customMotionVelocityScaleY);
++  get_parameter("custom_motion.velocity_scale_theta", config->customMotionVelocityScaleTheta);
++  get_parameter("custom_motion.soccer_mode_stop_settle_msec", config->customMotionSoccerModeStopSettleMsec);
+ 
+@@ -1176,3 +1186,13 @@ void Brain::pubKickMsg() {
+     if (!pubKickBall) return;
+-    if (!data->ballDetected) return;
++    const bool visualKickActive = tree->getEntry<bool>("visual_kick_active");
++    const bool useTrackedVisualKickBall =
++        visualKickActive &&
++        !data->ballDetected &&
++        tree->getEntry<bool>("ball_location_known") &&
++        std::isfinite(data->filterball.posToRobot.x) &&
++        std::isfinite(data->filterball.posToRobot.y) &&
++        std::isfinite(data->filterball.posToField.x) &&
++        std::isfinite(data->filterball.posToField.y);
++    if (!data->ballDetected && !useTrackedVisualKickBall) return;
++    const auto& kickBall = useTrackedVisualKickBall ? data->filterball : data->ball;
+ 
+@@ -1180,4 +1200,4 @@ void Brain::pubKickMsg() {
+     kickMsg.header.stamp = get_clock()->now();
+-    kickMsg.x = data->ball.posToRobot.x;
+-    kickMsg.y = data->ball.posToRobot.y;
++    kickMsg.x = kickBall.posToRobot.x;
++    kickMsg.y = kickBall.posToRobot.y;
+     kickMsg.dir = toPInPI(data->kickDir - data->robotPoseToField.theta);
+@@ -1186,3 +1206,2 @@ void Brain::pubKickMsg() {
+     double goal_y = 0.0;
+-    const bool visualKickActive = tree->getEntry<bool>("visual_kick_active");
+     const std::string secondaryState =
+@@ -1221,4 +1240,4 @@ void Brain::pubKickMsg() {
+ 
+-    double ball_x = data->ball.posToField.x;
+-    double ball_y = data->ball.posToField.y;
++    double ball_x = kickBall.posToField.x;
++    double ball_y = kickBall.posToField.y;
+     double dist = std::sqrt((goal_x - ball_x) * (goal_x - ball_x) +
+@@ -2552,2 +2571,7 @@ Brain::parametersCallback(const std::vector<rclcpp::Parameter> &parameters) {
+     else if (name == "custom_motion.brain_controls_mode") config->customMotionBrainControlsMode = param.as_bool();
++    else if (name == "custom_motion.cmd_vel_update_interval_msec") config->customMotionCmdVelUpdateIntervalMsec = param.as_double();
++    else if (name == "custom_motion.velocity_scale_x") config->customMotionVelocityScaleX = param.as_double();
++    else if (name == "custom_motion.velocity_scale_y") config->customMotionVelocityScaleY = param.as_double();
++    else if (name == "custom_motion.velocity_scale_theta") config->customMotionVelocityScaleTheta = param.as_double();
++    else if (name == "custom_motion.soccer_mode_stop_settle_msec") config->customMotionSoccerModeStopSettleMsec = param.as_double();
+ 
+diff --git a/INHA-Player/src/brain/src/brain_config.cpp b/INHA-Player/src/brain/src/brain_config.cpp
+index 3fed2a60..811beaf8 100644
+--- a/INHA-Player/src/brain/src/brain_config.cpp
++++ b/INHA-Player/src/brain/src/brain_config.cpp
+@@ -270,2 +270,7 @@ void BrainConfig::print(ostream &os) {
+   os << "    brainControlsMode = " << customMotionBrainControlsMode << endl;
++  os << "    cmdVelUpdateIntervalMsec = " << customMotionCmdVelUpdateIntervalMsec << endl;
++  os << "    velocityScaleX = " << customMotionVelocityScaleX << endl;
++  os << "    velocityScaleY = " << customMotionVelocityScaleY << endl;
++  os << "    velocityScaleTheta = " << customMotionVelocityScaleTheta << endl;
++  os << "    soccerModeStopSettleMsec = " << customMotionSoccerModeStopSettleMsec << endl;
+   os << "----------------------------------------" << endl;
+diff --git a/INHA-Player/src/brain/src/kick.cpp b/INHA-Player/src/brain/src/kick.cpp
+index 12c33ca1..b16112c3 100644
+--- a/INHA-Player/src/brain/src/kick.cpp
++++ b/INHA-Player/src/brain/src/kick.cpp
+@@ -768,15 +768,23 @@ bool RLVisionKick::hasFreshBallAfterSoccerConfirm() const
+ {
+-    if (!brain->data->ballDetected) {
+-        return false;
+-    }
+-    if (brain->data->ball.timePoint.nanoseconds() == 0) {
+-        return true;
+-    }
+-    if (brain->msecsSince(brain->data->ball.timePoint) > 500.0) {
+-        return false;
+-    }
+-    if (_soccerModeConfirmedTime.nanoseconds() == 0) {
+-        return true;
++    constexpr double kRecentRawBallMsec = 800.0;
++    constexpr double kRecentTrackedBallMsec = 1200.0;
++
++    if (brain->data->ballDetected) {
++        if (brain->data->ball.timePoint.nanoseconds() == 0) {
++            return true;
++        }
++        if (brain->msecsSince(brain->data->ball.timePoint) <= kRecentRawBallMsec) {
++            return true;
++        }
+     }
+-    return (brain->data->ball.timePoint - _soccerModeConfirmedTime).nanoseconds() >= -200000000;
++
++    const bool trackedBallKnown = brain->tree->getEntry<bool>("ball_location_known");
++    const auto& trackedBall = brain->data->filterball;
++    const double maxKickRange = std::max(_lockDistMax, _exitRange) + 0.3;
++    return trackedBallKnown &&
++           trackedBall.timePoint.nanoseconds() > 0 &&
++           brain->msecsSince(trackedBall.timePoint) <= kRecentTrackedBallMsec &&
++           std::isfinite(trackedBall.posToRobot.x) &&
++           std::isfinite(trackedBall.posToRobot.y) &&
++           trackedBall.range <= maxKickRange;
+ }
+@@ -794,4 +802,5 @@ void RLVisionKick::stepSoccerHeadReacquire()
+     if (hasFreshBallAfterSoccerConfirm()) {
+-        double pitch = brain->data->ball.pitchToRobot;
+-        double yaw = brain->data->ball.yawToRobot;
++        const auto& aimBall = brain->data->ballDetected ? brain->data->ball : brain->data->filterball;
++        double pitch = aimBall.pitchToRobot;
++        double yaw = aimBall.yawToRobot;
+         if (!std::isfinite(pitch) || pitch <= 0.0) pitch = 0.7;
+diff --git a/INHA-Player/src/brain/src/robot_client.cpp b/INHA-Player/src/brain/src/robot_client.cpp
+index c1e91176..c6323b3d 100644
+--- a/INHA-Player/src/brain/src/robot_client.cpp
++++ b/INHA-Player/src/brain/src/robot_client.cpp
+@@ -1,2 +1,3 @@
+ #include <cmath>
++#include <algorithm>
+ #include <chrono>
+@@ -115,3 +116,7 @@ int RobotClient::changeRobocupMode()
+ 
+-    stopMotionForModeChange();
++    const double soccerModeStopSettleMsec =
++        brain->config && brain->config->customMotionEnable
++            ? brain->config->customMotionSoccerModeStopSettleMsec
++            : 0.0;
++    stopMotionForModeChange(soccerModeStopSettleMsec);
+     const int ret = call(booster_interface::CreateChangeModeMsg(booster::robot::RobotMode::kSoccer));
+@@ -188,2 +193,9 @@ int RobotClient::setVelocity(double x, double y, double theta, bool applyMinX, b
+     theta = cap(theta, brain->config->vthetaLimit, -brain->config->vthetaLimit);
++
++    const bool customMotion = brain->config && brain->config->customMotionEnable;
++    if (customMotion) {
++        x *= std::max(0.0, brain->config->customMotionVelocityScaleX);
++        y *= std::max(0.0, brain->config->customMotionVelocityScaleY);
++        theta *= std::max(0.0, brain->config->customMotionVelocityScaleTheta);
++    }
+     
+@@ -232,9 +244,34 @@ int RobotClient::setVelocity(double x, double y, double theta, bool applyMinX, b
+     }
+-    _vx = x; _vy = y; _vtheta = theta; // 마지막으로 보낸 명령을 기억한다. 현재 로봇의 속도로 근사해서 사용할 수 있다.
+-    _lastCmdTime = brain->get_clock()->now();
+-    if (fabs(_vx) > 1e-3 || fabs(_vy) > 1e-3 || fabs(_vtheta) > 1e-3) _lastNonZeroCmdTime = brain->get_clock()->now();
+-    brain->log->log("RobotClient/setVelocity_out",
+-       rerun::TextLog(format("vx: %.2f  vy: %.2f  vtheta: %.2f", x, y, theta)));
++    if (customMotion) {
++        const bool isZeroCommand =
++            std::fabs(x) <= 1e-6 &&
++            std::fabs(y) <= 1e-6 &&
++            std::fabs(theta) <= 1e-6;
++        const bool lastSentZero =
++            std::fabs(_vx) <= 1e-6 &&
++            std::fabs(_vy) <= 1e-6 &&
++            std::fabs(_vtheta) <= 1e-6;
++        const bool zeroTransition = isZeroCommand && !lastSentZero;
++        const bool startTransition = !isZeroCommand && lastSentZero;
++        const double updateIntervalMsec =
++            std::max(0.0, brain->config->customMotionCmdVelUpdateIntervalMsec);
++        const bool shouldPublish =
++            zeroTransition ||
++            startTransition ||
++            updateIntervalMsec <= 0.0 ||
++            _lastCustomMotionVelocityPublishTime.nanoseconds() == 0 ||
++            brain->msecsSince(_lastCustomMotionVelocityPublishTime) >= updateIntervalMsec;
++        if (!shouldPublish) {
++            brain->log->log("RobotClient/setVelocity_throttled",
++                            rerun::TextLog(format("vx: %.2f  vy: %.2f  vtheta: %.2f", x, y, theta)));
++            return 0;
++        }
++
++        _vx = x; _vy = y; _vtheta = theta; // 마지막으로 실제 전송한 명령을 기억한다.
++        _lastCmdTime = brain->get_clock()->now();
++        _lastCustomMotionVelocityPublishTime = _lastCmdTime;
++        if (!isZeroCommand) _lastNonZeroCmdTime = _lastCmdTime;
++        brain->log->log("RobotClient/setVelocity_out",
++           rerun::TextLog(format("vx: %.2f  vy: %.2f  vtheta: %.2f", x, y, theta)));
+ 
+-    if (brain->config && brain->config->customMotionEnable) {
+         const int customRet = publishCustomMotionVelocity(x, y, theta);
+@@ -248,2 +285,8 @@ int RobotClient::setVelocity(double x, double y, double theta, bool applyMinX, b
+ 
++    _vx = x; _vy = y; _vtheta = theta; // 마지막으로 보낸 명령을 기억한다. 현재 로봇의 속도로 근사해서 사용할 수 있다.
++    _lastCmdTime = brain->get_clock()->now();
++    if (fabs(_vx) > 1e-3 || fabs(_vy) > 1e-3 || fabs(_vtheta) > 1e-3) _lastNonZeroCmdTime = brain->get_clock()->now();
++    brain->log->log("RobotClient/setVelocity_out",
++       rerun::TextLog(format("vx: %.2f  vy: %.2f  vtheta: %.2f", x, y, theta)));
++
+     return call(booster_interface::CreateMoveMsg(x, y, theta));
+@@ -276,3 +319,3 @@ int RobotClient::publishCustomMotionVelocity(double x, double y, double theta)
+ 
+-int RobotClient::stopMotionForModeChange()
++int RobotClient::stopMotionForModeChange(double finalSettleMsec)
+ {
+@@ -300,2 +343,3 @@ int RobotClient::stopMotionForModeChange()
+         _lastCmdTime = brain->get_clock()->now();
++        _lastCustomMotionVelocityPublishTime = _lastCmdTime;
+ 
+@@ -318,2 +362,30 @@ int RobotClient::stopMotionForModeChange()
+ 
++    const int settleMsec = static_cast<int>(std::max(0.0, finalSettleMsec));
++    if (settleMsec > 0) {
++        const int firstPauseMsec = std::min(150, settleMsec);
++        std::this_thread::sleep_for(std::chrono::milliseconds(firstPauseMsec));
++
++        _vx = 0.0;
++        _vy = 0.0;
++        _vtheta = 0.0;
++        _lastCmdTime = brain->get_clock()->now();
++        _lastCustomMotionVelocityPublishTime = _lastCmdTime;
++
++        if (brain->config && brain->config->customMotionEnable) {
++            const int customRet = publishCustomMotionVelocity(0.0, 0.0, 0.0);
++            if (ret == 0 && customRet != 0) {
++                ret = customRet;
++            }
++        }
++
++        const int sdkRet = call(booster_interface::CreateMoveMsg(0.0, 0.0, 0.0));
++        if (ret == 0 && sdkRet != 0) {
++            ret = sdkRet;
++        }
++
++        if (settleMsec > firstPauseMsec) {
++            std::this_thread::sleep_for(std::chrono::milliseconds(settleMsec - firstPauseMsec));
++        }
++    }
++
+     return ret;

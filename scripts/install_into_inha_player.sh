@@ -14,6 +14,7 @@ upgrade_patch_files=(
   "$repo_root/patches/inha-player-soccer-head-reacquire-upgrade.patch"
   "$repo_root/patches/inha-player-mode-stop-and-last-known-upgrade.patch"
   "$repo_root/patches/inha-player-smooth-stop-tight-kick-align-upgrade.patch"
+  "$repo_root/patches/inha-player-throttle-fast-custom-motion-upgrade.patch"
 )
 
 if [ ! -d "$player_root/src/brain" ]; then
@@ -88,6 +89,17 @@ upgrade_patch_already_integrated() {
         grep -q 'safe_dist="0.55" target_back_angle_deg="15.0"' "$player_root/src/brain/behavior_trees/subtrees/setpiece.xml" &&
         grep -q "kickTargetLateralTolerance = 0.20" "$player_root/src/brain/src/striker_decision.cpp" &&
         grep -q "kickTargetLateralTolerance = 0.20" "$player_root/src/brain/src/setpiece.cpp"
+      ;;
+    inha-player-throttle-fast-custom-motion-upgrade.patch)
+      grep -q "customMotionCmdVelUpdateIntervalMsec" "$player_root/src/brain/include/brain_config.h" &&
+        grep -q "customMotionSoccerModeStopSettleMsec" "$player_root/src/brain/include/brain_config.h" &&
+        grep -q "setVelocity_throttled" "$player_root/src/brain/src/robot_client.cpp" &&
+        grep -q "useTrackedVisualKickBall" "$player_root/src/brain/src/brain.cpp" &&
+        grep -q "kRecentTrackedBallMsec" "$player_root/src/brain/src/kick.cpp" &&
+        grep -q "custom_motion_cmd_vel_update_interval_msec" "$player_root/src/brain/launch/launch.py" &&
+        grep -q "custom_motion_soccer_mode_stop_settle_msec" "$player_root/src/brain/launch/launch.py" &&
+        grep -q "velocity_scale_x: 1.35" "$player_root/src/brain/config/config.yaml" &&
+        grep -q "soccer_mode_stop_settle_msec: 350.0" "$player_root/src/brain/config/config.yaml"
       ;;
     *)
       return 1

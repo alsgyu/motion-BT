@@ -64,6 +64,7 @@ python3 /home/booster/Workspace/INHA-Soccer/INHA-Player/motions/jy_walk_001/boos
   --task k1_scratch_walk_001 \
   --checkpoint /home/booster/Workspace/deploy/tasks/scratch/models/JY_walk_001_symmetry_2026-07-30_18-18-57_best_best.pt \
   --topic /inha/custom_motion/cmd_vel \
+  --cmd-timeout 1.0 \
   --head-topic /inha/custom_motion/head
 ```
 
@@ -87,13 +88,35 @@ Example:
 ./motions/jy_walk_001/start_bt_custom_motion.sh default custom_motion_brain_controls_mode:=true
 ```
 
+To tune command smoothing or speed without rebuilding code, pass launch
+overrides after the field name:
+
+```bash
+./motions/jy_walk_001/start_bt_custom_motion.sh default \
+  custom_motion_brain_controls_mode:=true \
+  custom_motion_cmd_vel_update_interval_msec:=500 \
+  custom_motion_velocity_scale_x:=1.35 \
+  custom_motion_velocity_scale_y:=1.35 \
+  custom_motion_velocity_scale_theta:=1.35 \
+  custom_motion_soccer_mode_stop_settle_msec:=350
+```
+
 ## Behavior
 
 - Default mode is unchanged unless `custom_motion:=true` is passed.
-- With custom motion enabled, `RobotClient::setVelocity()` publishes
-  `geometry_msgs/Twist` to `/inha/custom_motion/cmd_vel`.
+- With custom motion enabled, `RobotClient::setVelocity()` scales velocity
+  commands and publishes non-zero `geometry_msgs/Twist` updates to
+  `/inha/custom_motion/cmd_vel` at most once every
+  `custom_motion_cmd_vel_update_interval_msec` milliseconds. Start/stop
+  transitions are still sent immediately.
+- Before switching from custom motion to soccer mode for visual kick, the
+  robot holds zero velocity for `custom_motion_soccer_mode_stop_settle_msec`
+  milliseconds so the mode change starts from a settled body.
 - With custom motion enabled, `RobotClient::moveHead()` also publishes
   `sensor_msgs/JointState` to `/inha/custom_motion/head`.
+- During visual kick, tracked ball position can be used briefly if the raw
+  ball detection drops while the head is recovering from the soccer-mode
+  stand pose.
 - Every robot mode change ramps the last commanded velocity down through
   `60% -> 30% -> 0%`, then sends zero velocity to both the custom motion
   `cmd_vel` bridge and the Booster SDK move API before and after the mode
