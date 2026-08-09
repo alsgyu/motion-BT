@@ -40,6 +40,8 @@ class CmdVelControlService:
         self._node = None
         self._sub = None
         self._head_sub = None
+        self._kick_sub = None
+        self._kick_active = False
         self._last_cmd_time = 0.0
         self._vx = 0.0
         self._vy = 0.0
@@ -74,16 +76,22 @@ class CmdVelControlService:
     def get_vx_cmd(self) -> float:
         self._spin_once()
         with self._lock:
+            if self._kick_active:
+                return 0.0
             return self._normalize(self._fresh_or_zero(self._vx), self.config.max_vx)
 
     def get_vy_cmd(self) -> float:
         self._spin_once()
         with self._lock:
+            if self._kick_active:
+                return 0.0
             return self._normalize(self._fresh_or_zero(self._vy), self.config.max_vy)
 
     def get_vyaw_cmd(self) -> float:
         self._spin_once()
         with self._lock:
+            if self._kick_active:
+                return 0.0
             return self._normalize(self._fresh_or_zero(self._vyaw), self.config.max_vyaw)
 
     def get_head_override(self):
@@ -110,6 +118,7 @@ class CmdVelControlService:
         self._node = None
         self._sub = None
         self._head_sub = None
+        self._kick_sub = None
 
     def _ensure_node(self):
         if self._node is not None:
@@ -118,6 +127,7 @@ class CmdVelControlService:
         import rclpy
         from geometry_msgs.msg import Twist
         from sensor_msgs.msg import JointState
+        from std_msgs.msg import Bool
 
         if not rclpy.ok():
             return
@@ -138,6 +148,13 @@ class CmdVelControlService:
                 10,
             )
             print(f"[bt_head] subscribed: {self.config.head_topic}")
+        self._kick_sub = self._node.create_subscription(
+            Bool,
+            "/inha/custom_motion/kick/active",
+            self._kick_active_callback,
+            10,
+        )
+        print("[bt_cmd_vel] subscribed: /inha/custom_motion/kick/active")
 
     def _spin_once(self):
         import rclpy
@@ -178,6 +195,12 @@ class CmdVelControlService:
             self._head_yaw.value = yaw
             self._head_pitch.value = pitch
             self._head_last_cmd_time.value = time.monotonic()
+
+    def _kick_active_callback(self, msg):
+        was_active = self._kick_active
+        self._kick_active = bool(msg.data)
+        if was_active != self._kick_active:
+            print(f"[bt_cmd_vel] kick_active={self._kick_active}", flush=True)
 
     def _has_fresh_command(self) -> bool:
         self._spin_once()

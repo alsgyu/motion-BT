@@ -1,0 +1,29 @@
+name: jy_kick_001
+description: BT custom-mode kick profile for K1 kick policy. No mode switch required.
+
+brain:
+  custom_motion_enable: true
+  custom_kick_enable: true
+  cmd_vel_topic: /inha/custom_motion/cmd_vel
+  head_topic: /inha/custom_motion/head
+  kick_goal_topic: /inha/custom_motion/kick/goal
+  kick_active_topic: /inha/custom_motion/kick/active
+  publish_sdk_move: false
+  require_subscriber: true
+  brain_controls_mode: false
+
+booster_deploy:
+  repo_path: /home/booster/Workspace/deploy
+  task_hint: k1_scratch_walk_001
+  task_config_hint: /home/booster/Workspace/deploy/tasks/scratch/walk_001.py
+  checkpoint_path: /home/booster/Workspace/deploy/tasks/scratch/models/JY_walk_001_symmetry_2026-07-30_18-18-57_best_best.pt
+  kick_task_hint: k1_kick_001
+  kick_checkpoint_path: /home/booster/Workspace/deploy/tasks/kick_isaaclab/models/k1_kick_001_2026-08-05_01-05-52.pt
+  runner: booster_deploy_overlay/run_bt_cmd_vel.py
+  kick_runner: booster_deploy_overlay/run_bt_kick.py
+
+notes:
+  - Start BOTH runners before starting brain: walk runner + kick runner.
+  - The kick runner idles until a kick goal is received.
+  - Walk runner automatically pauses while kick runner is active.
+  - No mode switch (kCustom → kSoccer) is needed for kicks.

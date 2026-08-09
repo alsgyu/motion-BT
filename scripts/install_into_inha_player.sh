@@ -14,7 +14,11 @@ upgrade_patch_files=(
   "$repo_root/patches/inha-player-soccer-head-reacquire-upgrade.patch"
   "$repo_root/patches/inha-player-mode-stop-and-last-known-upgrade.patch"
   "$repo_root/patches/inha-player-smooth-stop-tight-kick-align-upgrade.patch"
+<<<<<<< Updated upstream
   "$repo_root/patches/inha-player-throttle-fast-custom-motion-upgrade.patch"
+=======
+  "$repo_root/patches/inha-player-custom-kick.patch"
+>>>>>>> Stashed changes
 )
 
 if [ ! -d "$player_root/src/brain" ]; then
@@ -90,6 +94,7 @@ upgrade_patch_already_integrated() {
         grep -q "kickTargetLateralTolerance = 0.20" "$player_root/src/brain/src/striker_decision.cpp" &&
         grep -q "kickTargetLateralTolerance = 0.20" "$player_root/src/brain/src/setpiece.cpp"
       ;;
+<<<<<<< Updated upstream
     inha-player-throttle-fast-custom-motion-upgrade.patch)
       grep -q "customMotionCmdVelUpdateIntervalMsec" "$player_root/src/brain/include/brain_config.h" &&
         grep -q "customMotionSoccerModeStopSettleMsec" "$player_root/src/brain/include/brain_config.h" &&
@@ -100,6 +105,12 @@ upgrade_patch_already_integrated() {
         grep -q "custom_motion_soccer_mode_stop_settle_msec" "$player_root/src/brain/launch/launch.py" &&
         grep -q "velocity_scale_x: 1.35" "$player_root/src/brain/config/config.yaml" &&
         grep -q "soccer_mode_stop_settle_msec: 350.0" "$player_root/src/brain/config/config.yaml"
+=======
+    inha-player-custom-kick.patch)
+      grep -q "customKickEnable" "$player_root/src/brain/include/brain_config.h" &&
+        grep -q "publishCustomKickGoal" "$player_root/src/brain/src/robot_client.cpp" &&
+        grep -q "custom kick goal published" "$player_root/src/brain/src/kick.cpp"
+>>>>>>> Stashed changes
       ;;
     *)
       return 1
