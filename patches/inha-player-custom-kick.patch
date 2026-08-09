@@ -2,8 +2,8 @@ diff --git a/INHA-Player/src/brain/config/config.yaml b/INHA-Player/src/brain/co
 index 6944bdc6..a1b2c3d4 100644
 --- a/INHA-Player/src/brain/config/config.yaml
 +++ b/INHA-Player/src/brain/config/config.yaml
-@@ -35,2 +35,9 @@ brain_node:
-       brain_controls_mode: false
+@@ -38,4 +38,11 @@ brain_node:
+       soccer_mode_stop_settle_msec: 350.0
 +
 +    custom_kick:
 +      enable: false
@@ -16,8 +16,8 @@ diff --git a/INHA-Player/src/brain/include/brain_config.h b/INHA-Player/src/brai
 index 6f2452b6..d5e6f7a8 100644
 --- a/INHA-Player/src/brain/include/brain_config.h
 +++ b/INHA-Player/src/brain/include/brain_config.h
-@@ -238,2 +238,7 @@ public:
-     bool customMotionBrainControlsMode = false;
+@@ -278,3 +278,8 @@ public:
+     double customMotionSoccerModeStopSettleMsec = 350.0;
 +
 +    bool customKickEnable = false;
 +    string customKickGoalTopic = "/inha/custom_motion/kick/goal";
@@ -28,46 +28,36 @@ diff --git a/INHA-Player/src/brain/include/robot_client.h b/INHA-Player/src/brai
 index 3aa4ee24..b1c2d3e4 100644
 --- a/INHA-Player/src/brain/include/robot_client.h
 +++ b/INHA-Player/src/brain/include/robot_client.h
-@@ -7,2 +7,3 @@
- #include "geometry_msgs/msg/twist.hpp"
-+#include "geometry_msgs/msg/pose2_d.hpp"
+@@ -9,2 +9,3 @@
  #include "sensor_msgs/msg/joint_state.hpp"
-@@ -134,2 +135,8 @@ public:
++#include "geometry_msgs/msg/pose2_d.hpp"
+ #include "booster_interface/srv/rpc_service.hpp"
+@@ -135,2 +136,8 @@ public:
  
 +    /**
 +     * @brief Publish a kick goal to the custom kick runner.
-+     * @param ballX, ballY  Ball position in robot frame (m).
-+     * @param targetAngleDeg  Kick target direction in robot frame (degrees).
 +     */
 +    int publishCustomKickGoal(double ballX, double ballY, double targetAngleDeg);
 +
      /**
-@@ -168,2 +175,4 @@ private:
+@@ -166,2 +173,4 @@ private:
      int publishCustomMotionHead(double pitch, double yaw);
 +    int publishCustomKickGoalImpl(double ballX, double ballY, double targetAngleDeg);
-     int stopMotionForModeChange();
-@@ -173,2 +182,3 @@ private:
-     rclcpp::Publisher<sensor_msgs::msg::JointState>::SharedPtr customMotionHeadPublisher;
-+    rclcpp::Publisher<geometry_msgs::msg::Pose2D>::SharedPtr customKickGoalPublisher;
-     std::string customMotionCmdVelTopic;
-@@ -176,2 +186,4 @@ private:
+     int stopMotionForModeChange(double finalSettleMsec = 0.0);
+@@ -171,2 +180,4 @@ private:
      std::string customMotionHeadTopic;
++    rclcpp::Publisher<geometry_msgs::msg::Pose2D>::SharedPtr customKickGoalPublisher;
 +    std::string customKickGoalTopic;
-+    bool customKickActive = false;
      Brain *brain;
 diff --git a/INHA-Player/src/brain/src/robot_client.cpp b/INHA-Player/src/brain/src/robot_client.cpp
 index c1e91176..f2a3b4c5 100644
 --- a/INHA-Player/src/brain/src/robot_client.cpp
 +++ b/INHA-Player/src/brain/src/robot_client.cpp
-@@ -5,2 +5,3 @@
- #include "geometry_msgs/msg/twist.hpp"
-+#include "geometry_msgs/msg/pose2_d.hpp"
+@@ -7,2 +7,3 @@
  #include "sensor_msgs/msg/joint_state.hpp"
-@@ -8,2 +9,3 @@
++#include "geometry_msgs/msg/pose2_d.hpp"
  #include "std_msgs/msg/string.hpp"
-+#include "std_msgs/msg/bool.hpp"
- #include "booster_interface/srv/rpc_service.hpp"
-@@ -274,2 +276,34 @@ int RobotClient::publishCustomMotionVelocity(double x, double y, double theta)
+@@ -319,2 +320,32 @@ int RobotClient::publishCustomMotionVelocity(double x, double y, double theta)
  
 +int RobotClient::publishCustomKickGoalImpl(double ballX, double ballY, double targetAngleDeg)
 +{
@@ -103,17 +93,12 @@ index c1e91176..f2a3b4c5 100644
 +    return ret;
 +}
 +
- int RobotClient::stopMotionForModeChange()
-@@ -308,2 +310,4 @@ int RobotClient::stopMotionForModeChange()
- 
-+// Kick goal publisher is lazily created in publishCustomKickGoalImpl().
-+
- int RobotClient::publishCustomMotionHead(double pitch, double yaw)
+ int RobotClient::stopMotionForModeChange(double finalSettleMsec)
 diff --git a/INHA-Player/src/brain/src/kick.cpp b/INHA-Player/src/brain/src/kick.cpp
 index 12c33ca1..a4b5c6d7 100644
 --- a/INHA-Player/src/brain/src/kick.cpp
 +++ b/INHA-Player/src/brain/src/kick.cpp
-@@ -684,2 +684,38 @@ void RLVisionKick::recordExitTime()
+@@ -706,2 +706,37 @@ void RLVisionKick::recordExitTime()
  
 +static double _getBallRobotX(const Brain *brain)
 +{
@@ -152,7 +137,7 @@ index 12c33ca1..a4b5c6d7 100644
 +        return;
 +    }
 +
-@@ -735,2 +771,10 @@ NodeStatus RLVisionKick::onRunning()
+@@ -758,2 +793,10 @@ NodeStatus RLVisionKick::onRunning()
  
 +    if (brain->config && brain->config->customMotionEnable && brain->config->customKickEnable) {
 +        if (_visionKickStarted) {
@@ -174,7 +159,7 @@ diff --git a/INHA-Player/src/brain/src/brain.cpp b/INHA-Player/src/brain/src/bra
 index bcdf5b33..e1f2a3b4 100644
 --- a/INHA-Player/src/brain/src/brain.cpp
 +++ b/INHA-Player/src/brain/src/brain.cpp
-@@ -129,2 +129,6 @@ Brain::Brain() : rclcpp::Node("brain_node", rclcpp::NodeOptions().allow_undeclar
+@@ -183,3 +183,7 @@ Brain::Brain() : rclcpp::Node("brain_node", rclcpp::NodeOptions().allow_undeclar
  
 +  declare_parameter<bool>("custom_kick.enable", false);
 +  declare_parameter<string>("custom_kick.goal_topic", "/inha/custom_motion/kick/goal");
@@ -182,7 +167,7 @@ index bcdf5b33..e1f2a3b4 100644
 +  declare_parameter<double>("custom_kick.duration_msec", 3000.0);
 +
    declare_parameter<double>("robot.robot_height", 1.0);
-@@ -714,2 +718,6 @@ void Brain::loadConfig() {
+@@ -981,3 +985,7 @@ void Brain::loadConfig() {
  
 +  get_parameter("custom_kick.enable", config->customKickEnable);
 +  get_parameter("custom_kick.goal_topic", config->customKickGoalTopic);
@@ -190,14 +175,13 @@ index bcdf5b33..e1f2a3b4 100644
 +  get_parameter("custom_kick.duration_msec", config->customKickDurationMsec);
 +
    get_parameter("robot.robot_height", config->robotHeight);
-@@ -2547,2 +2555,10 @@ Brain::parametersCallback(const std::vector<rclcpp::Parameter> &parameters) {
+@@ -3112,2 +3120,10 @@ Brain::parametersCallback(const std::vector<rclcpp::Parameter> &parameters) {
  
 +    else if (name == "custom_kick.enable") {
 +      config->customKickEnable = param.as_bool();
 +    }
 +    else if (name == "custom_kick.goal_topic") {
 +      config->customKickGoalTopic = param.as_string();
-+      if (client) client->configureCustomMotionPublisher();
 +    }
 +
      else if (name == "kick.lock_dist_max") {
@@ -205,7 +189,7 @@ diff --git a/INHA-Player/src/brain/launch/launch.py b/INHA-Player/src/brain/laun
 index 1b3b02b1..f4e5d6a7 100644
 --- a/INHA-Player/src/brain/launch/launch.py
 +++ b/INHA-Player/src/brain/launch/launch.py
-@@ -77,2 +77,14 @@ def handle_configuration(context, *args, **kwargs):
+@@ -79,2 +79,14 @@ def handle_configuration(context, *args, **kwargs):
  
 +    customKick = context.perform_substitution(LaunchConfiguration('custom_kick'))
 +    if customKick in ['true', 'True', '1']:
@@ -220,7 +204,7 @@ index 1b3b02b1..f4e5d6a7 100644
 +        config['custom_kick.active_topic'] = customKickActiveTopic
 +
      parameter_files = [config_file]
-@@ -156,2 +168,22 @@ def generate_launch_description():
+@@ -180,2 +192,22 @@ def generate_launch_description():
          ),
 +        DeclareLaunchArgument(
 +            'custom_kick',
@@ -230,16 +214,16 @@ index 1b3b02b1..f4e5d6a7 100644
 +        DeclareLaunchArgument(
 +            'custom_kick_goal_topic',
 +            default_value='/inha/custom_motion/kick/goal',
-+            description='geometry_msgs/Pose2D topic for kick goal (x=ball_x, y=ball_y, theta=target_angle_deg)'
++            description='geometry_msgs/Pose2D topic for kick goal'
 +        ),
 +        DeclareLaunchArgument(
 +            'custom_kick_active_topic',
 +            default_value='/inha/custom_motion/kick/active',
-+            description='std_msgs/Bool topic signalling that the kick runner is executing a kick'
++            description='std_msgs/Bool topic signalling kick runner active state'
 +        ),
 +        DeclareLaunchArgument(
 +            'custom_kick_duration_msec',
 +            default_value='3000.0',
-+            description='Maximum kick duration in milliseconds before BT times out'
++            description='Max kick duration in ms before BT times out'
 +        ),
-         OpaqueFunction(function=handle_configuration) # handle_configuration 함수로 전달하여 추가 설정을 처리
+         OpaqueFunction(function=handle_configuration)
