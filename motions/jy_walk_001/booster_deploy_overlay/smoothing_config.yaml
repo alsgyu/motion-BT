@@ -27,7 +27,17 @@ smoothing:
   #             발이 꼬이거나 넘어지는 문제가 있으면 낮춰볼 것 (0.1~0.2)
   # 높을수록(0.7): 명령에 빠르게 반응, 원본에 가까움.
   #               흔들림 없이 잘 걸으면 높여도 됨.
-  # 0.0: 출력 고정 (절대 안 바뀜, 테스트용)
+  # 0.0: 출력 고정 (절  # 1. motion-BT pull
+  cd /home/booster/Workspace/motion-BT
+  git pull
+  
+  # 2. 업데이트된 파일을 INHA-Player로 복사
+  ./scripts/install_into_inha_player.sh /home/booster/Workspace/INHA-Soccer
+  
+  # 3. 파일이 제대로 들어갔는지 확인
+  grep -n "ramp_up_time_sec" /home/booster/Workspace/INHA-Soccer/INHA-Player/motions/jy_walk_001/booster_deploy_overlay/smoothing_config.yaml
+  
+  # 4. runner 재시작대 안 바뀜, 테스트용)
   # 1.0: 필터 없음 (원본 그대로 통과, 이전 방식과 동일)
   #
   # 권장: 발 꼬임 문제 → 0.15~0.2 / 보통 → 0.3 / 민첩 → 0.5~0.7
