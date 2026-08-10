@@ -82,17 +82,38 @@ smoothing:
   # 권장: 넘어짐 방지 → 0.3 / 보통 → 0.5 / 즉시 정지 → 1.0
   stop_decay_alpha: 0.5
 
+  # ------------------------------------------------------------------
+  # max_output_vx / vy / vyaw: 출력 절대값 제한 (Hard Clamp)
+  # ------------------------------------------------------------------
+  # 최종 smoothed 출력의 절대값을 이 값 이하로 제한.
+  #   if |output| > max_output → clamp
+  #
+  # 목적: BT가 아무리 큰 명령을 보내도 RL 정책에 전달되는
+  #       최대 속도 명령을 안전 범위로 제한.
+  #
+  # 예: max_output_vx=0.6, max_vx=0.5 m/s 이면 실제 최대 속도는 0.3 m/s
+  #
+  # 1.0: 제한 없음 (기본값).
+  # 0.5~0.7: 보수적. 처음 테스트할 때 추천.
+  # 0.0: 해당 축 완전 차단.
+  max_output_vx: 1.0
+  max_output_vy: 1.0
+  max_output_vyaw: 1.0
+
 # ==========================================================================
 # Presets (원하는 프리셋을 위쪽 smoothing: 아래에 붙여넣어 사용)
 # ==========================================================================
 #
 # [safe]   – 보수적. 실제 로봇 첫 테스트용.
 #   alpha: 0.2
-#   max_delta_vx: 0.08
-#   max_delta_vy: 0.08
-#   max_delta_vyaw: 0.1
+#   max_delta_vx: 0.05
+#   max_delta_vy: 0.05
+#   max_delta_vyaw: 0.08
 #   deadband: 0.12
 #   stop_decay_alpha: 0.3
+#   max_output_vx: 0.6
+#   max_output_vy: 0.5
+#   max_output_vyaw: 0.5
 #
 # [balanced] – 기본값. 대부분 상황에 무난.
 #   alpha: 0.3

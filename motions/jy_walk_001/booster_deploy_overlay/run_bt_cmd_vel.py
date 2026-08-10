@@ -36,6 +36,10 @@ class CmdVelControlConfig:
     max_delta_vyaw: float = 0.2        # max vyaw change per control step (normalized)
     deadband: float = 0.08             # commands below this (normalized) are zeroed
     stop_decay_alpha: float = 0.5      # decay rate when command times out (lower = gentler stop)
+    # -- Output clamping (hard limit on final normalized output) --
+    max_output_vx: float = 1.0         # clamp |vx| <= this (1.0 = no extra limit)
+    max_output_vy: float = 1.0         # clamp |vy| <= this
+    max_output_vyaw: float = 1.0       # clamp |vyaw| <= this
 
 
 class CmdVelControlService:
@@ -116,6 +120,7 @@ class CmdVelControlService:
             smoothed_attr="_smoothed_vx",
             max_delta=self.config.max_delta_vx,
             max_abs=self.config.max_vx,
+            max_output=self.config.max_output_vx,
         )
 
     def _smooth_vy_locked(self) -> float:
@@ -124,6 +129,7 @@ class CmdVelControlService:
             smoothed_attr="_smoothed_vy",
             max_delta=self.config.max_delta_vy,
             max_abs=self.config.max_vy,
+            max_output=self.config.max_output_vy,
         )
 
     def _smooth_vyaw_locked(self) -> float:
@@ -132,6 +138,7 @@ class CmdVelControlService:
             smoothed_attr="_smoothed_vyaw",
             max_delta=self.config.max_delta_vyaw,
             max_abs=self.config.max_vyaw,
+            max_output=self.config.max_output_vyaw,
         )
 
     def _apply_smoothing(
@@ -140,15 +147,17 @@ class CmdVelControlService:
         smoothed_attr: str,
         max_delta: float,
         max_abs: float,
+        max_output: float = 1.0,
     ) -> float:
-        """Apply EMA filter, deadband, rate limiter, and normalization.
+        """Apply EMA filter, deadband, rate limiter, output clamp, and normalization.
 
         Pipeline (all in normalized [-1, 1] space):
           1. Normalize raw command
           2. Deadband: zero out tiny commands
           3. EMA low-pass filter (smoothing_alpha)
           4. Rate limiter (max_delta per call)
-          5. Return final normalized value
+          5. Output clamp (max_output)
+          6. Return final normalized value
         """
         alpha = self.config.smoothing_alpha
         deadband = self.config.deadband
@@ -180,6 +189,12 @@ class CmdVelControlService:
             new_val = prev + max_delta
         elif delta < -max_delta:
             new_val = prev - max_delta
+
+        # 5. Output clamp: hard limit final value
+        if new_val > max_output:
+            new_val = max_output
+        elif new_val < -max_output:
+            new_val = -max_output
 
         # Persist
         setattr(self, smoothed_attr, new_val)
@@ -381,6 +396,13 @@ def main() -> int:
                         help="Commands below this (normalized) are zeroed")
     parser.add_argument("--stop-decay-alpha", type=float, default=None,
                         help="Decay rate when cmd times out (lower=gentler stop)")
+    # -- Output clamping --
+    parser.add_argument("--max-output-vx", type=float, default=None,
+                        help="Hard clamp |vx output| <= this (1.0=no limit)")
+    parser.add_argument("--max-output-vy", type=float, default=None,
+                        help="Hard clamp |vy output| <= this (1.0=no limit)")
+    parser.add_argument("--max-output-vyaw", type=float, default=None,
+                        help="Hard clamp |vyaw output| <= this (1.0=no limit)")
     args = parser.parse_args()
 
     # -- Load YAML config (lower priority than explicit CLI args) --
@@ -419,6 +441,9 @@ def main() -> int:
             "max-delta-vyaw": "max_delta_vyaw",
             "deadband": "deadband",
             "stop-decay-alpha": "stop_decay_alpha",
+            "max-output-vx": "max_output_vx",
+            "max-output-vy": "max_output_vy",
+            "max-output-vyaw": "max_output_vyaw",
         }
         yaml_key_short = short_map.get(name, name)
         return float(yaml_smoothing.get(yaml_key, yaml_smoothing.get(yaml_key_short, default)))
@@ -429,11 +454,15 @@ def main() -> int:
     max_delta_vyaw = _resolve("max-delta-vyaw", 0.2)
     deadband = _resolve("deadband", 0.08)
     stop_decay_alpha = _resolve("stop-decay-alpha", 0.5)
+    max_output_vx = _resolve("max-output-vx", 1.0)
+    max_output_vy = _resolve("max-output-vy", 1.0)
+    max_output_vyaw = _resolve("max-output-vyaw", 1.0)
 
     print(
         f"[bt_cmd_vel] smoothing: alpha={smoothing_alpha:.3f} "
         f"delta_vx={max_delta_vx:.3f} delta_vy={max_delta_vy:.3f} delta_vyaw={max_delta_vyaw:.3f} "
-        f"deadband={deadband:.4f} stop_decay={stop_decay_alpha:.3f}",
+        f"deadband={deadband:.4f} stop_decay={stop_decay_alpha:.3f} "
+        f"max_out(vx={max_output_vx:.2f} vy={max_output_vy:.2f} vyaw={max_output_vyaw:.2f})",
         flush=True,
     )
 
@@ -474,6 +503,9 @@ def main() -> int:
         max_delta_vyaw=max_delta_vyaw,
         deadband=deadband,
         stop_decay_alpha=stop_decay_alpha,
+        max_output_vx=max_output_vx,
+        max_output_vy=max_output_vy,
+        max_output_vyaw=max_output_vyaw,
     )
 
     class BoundCmdVelControlService(CmdVelControlService):
