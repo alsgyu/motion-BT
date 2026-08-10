@@ -14,9 +14,11 @@ upgrade_patch_files=(
   "$repo_root/patches/inha-player-soccer-head-reacquire-upgrade.patch"
   "$repo_root/patches/inha-player-mode-stop-and-last-known-upgrade.patch"
   "$repo_root/patches/inha-player-smooth-stop-tight-kick-align-upgrade.patch"
-  "$repo_root/patches/inha-player-throttle-fast-custom-motion-upgrade.patch"
   "$repo_root/patches/inha-player-custom-kick.patch"
 )
+# NOTE: inha-player-throttle-fast-custom-motion-upgrade.patch is removed —
+# its features (throttling, velocity_scale, settle, tracked-ball fallback)
+# are all included in the base custom-motion.patch.
 
 if [ ! -d "$player_root/src/brain" ]; then
   echo "[ERROR] INHA-Player brain package not found: $player_root/src/brain" >&2
@@ -94,14 +96,6 @@ upgrade_patch_already_integrated() {
         grep -q 'safe_dist="0.55" target_back_angle_deg="15.0"' "$player_root/src/brain/behavior_trees/subtrees/setpiece.xml" &&
         grep -q "kickTargetLateralTolerance = 0.20" "$player_root/src/brain/src/striker_decision.cpp" &&
         grep -q "kickTargetLateralTolerance = 0.20" "$player_root/src/brain/src/setpiece.cpp"
-      ;;
-    inha-player-throttle-fast-custom-motion-upgrade.patch)
-      # Throttle-specific features (config fields may also come from base patch)
-      grep -q "setVelocity_throttled" "$player_root/src/brain/src/robot_client.cpp" &&
-        grep -q "useTrackedVisualKickBall" "$player_root/src/brain/src/brain.cpp" &&
-        grep -q "kRecentTrackedBallMsec" "$player_root/src/brain/src/kick.cpp" &&
-        (grep -q "velocity_scale_x: 1.35\|velocity_scale_x: 1.0" "$player_root/src/brain/config/config.yaml" ||
-          grep -q "customMotionVelocityScaleX" "$player_root/src/brain/include/brain_config.h")
       ;;
     inha-player-custom-kick.patch)
       grep -q "customKickEnable" "$player_root/src/brain/include/brain_config.h" &&

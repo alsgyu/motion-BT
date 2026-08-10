@@ -118,19 +118,9 @@ check "kickTargetLateralTolerance = 0.20 in striker_decision" \
 check "kickTargetLateralTolerance = 0.20 in setpiece" \
   grep -q "kickTargetLateralTolerance = 0.20" "$player_root/src/brain/src/setpiece.cpp"
 
-# -- throttle-fast-custom-motion-upgrade --
-echo ""
-echo "--- throttle-fast-custom-motion-upgrade ---"
-check "setVelocity_throttled in robot_client.cpp (throttle core)" \
-  grep -q "setVelocity_throttled" "$player_root/src/brain/src/robot_client.cpp"
-check "useTrackedVisualKickBall in brain.cpp (throttle core)" \
-  grep -q "useTrackedVisualKickBall" "$player_root/src/brain/src/brain.cpp"
-check "kRecentTrackedBallMsec in kick.cpp (throttle core)" \
-  grep -q "kRecentTrackedBallMsec" "$player_root/src/brain/src/kick.cpp"
-check "velocity_scale in config.yaml (from base or throttle)" \
-  grep -q "velocity_scale_x: 1\.\|customMotionVelocityScaleX" "$player_root/src/brain/config/config.yaml" "$player_root/src/brain/include/brain_config.h" 2>/dev/null || true
-# The config/launch fields (cmd_vel_update_interval, soccer_mode_stop_settle)
-# may already be present from the base custom-motion patch — that's fine.
+# NOTE: throttle-fast-custom-motion-upgrade.patch is deprecated.
+# Its features are now included in the base custom-motion.patch.
+# Verify with these checks instead:
 
 # -- custom-kick --
 echo ""
