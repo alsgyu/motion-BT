@@ -39,6 +39,10 @@ apply_upgrade_patch() {
   elif git -C "$inha_soccer_root" apply --check "$upgrade_patch_file" >/dev/null 2>&1; then
     echo "[PATCH] applying $upgrade_patch_name"
     git -C "$inha_soccer_root" apply "$upgrade_patch_file"
+  elif git -C "$inha_soccer_root" apply --reject --whitespace=fix "$upgrade_patch_file" 2>/dev/null; then
+    echo "[PATCH] $upgrade_patch_name partially applied (some hunks skipped — already in base patch)"
+    # Clean up .rej files — these are duplicate hunks that base patch already handled
+    find "$inha_soccer_root" -name "*.rej" -delete 2>/dev/null || true
   else
     if upgrade_patch_already_integrated "$upgrade_patch_name"; then
       echo "[PATCH] $upgrade_patch_name already integrated"
