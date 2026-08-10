@@ -92,15 +92,12 @@ upgrade_patch_already_integrated() {
         grep -q "kickTargetLateralTolerance = 0.20" "$player_root/src/brain/src/setpiece.cpp"
       ;;
     inha-player-throttle-fast-custom-motion-upgrade.patch)
-      grep -q "customMotionCmdVelUpdateIntervalMsec" "$player_root/src/brain/include/brain_config.h" &&
-        grep -q "customMotionSoccerModeStopSettleMsec" "$player_root/src/brain/include/brain_config.h" &&
-        grep -q "setVelocity_throttled" "$player_root/src/brain/src/robot_client.cpp" &&
+      # Throttle-specific features (config fields may also come from base patch)
+      grep -q "setVelocity_throttled" "$player_root/src/brain/src/robot_client.cpp" &&
         grep -q "useTrackedVisualKickBall" "$player_root/src/brain/src/brain.cpp" &&
         grep -q "kRecentTrackedBallMsec" "$player_root/src/brain/src/kick.cpp" &&
-        grep -q "custom_motion_cmd_vel_update_interval_msec" "$player_root/src/brain/launch/launch.py" &&
-        grep -q "custom_motion_soccer_mode_stop_settle_msec" "$player_root/src/brain/launch/launch.py" &&
-        grep -q "velocity_scale_x: 1.35" "$player_root/src/brain/config/config.yaml" &&
-        grep -q "soccer_mode_stop_settle_msec: 350.0" "$player_root/src/brain/config/config.yaml"
+        (grep -q "velocity_scale_x: 1.35\|velocity_scale_x: 1.0" "$player_root/src/brain/config/config.yaml" ||
+          grep -q "customMotionVelocityScaleX" "$player_root/src/brain/include/brain_config.h")
       ;;
     inha-player-custom-kick.patch)
       grep -q "customKickEnable" "$player_root/src/brain/include/brain_config.h" &&
