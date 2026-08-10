@@ -29,6 +29,13 @@ class CmdVelControlConfig:
     head_pitch_index: int
     head_timeout_sec: float
     head_override: bool
+    # -- Smoothing / rate-limiting --
+    smoothing_alpha: float = 0.3       # 0=no smoothing, 1=instant (no filter)
+    max_delta_vx: float = 0.15         # max vx change per control step (normalized)
+    max_delta_vy: float = 0.15         # max vy change per control step (normalized)
+    max_delta_vyaw: float = 0.2        # max vyaw change per control step (normalized)
+    deadband: float = 0.08             # commands below this (normalized) are zeroed
+    stop_decay_alpha: float = 0.5      # decay rate when command times out (lower = gentler stop)
 
 
 class CmdVelControlService:
@@ -46,6 +53,9 @@ class CmdVelControlService:
         self._vx = 0.0
         self._vy = 0.0
         self._vyaw = 0.0
+        self._smoothed_vx = 0.0
+        self._smoothed_vy = 0.0
+        self._smoothed_vyaw = 0.0
         self._head_lock = mp.Lock()
         self._head_pitch = mp.Value("d", 0.0)
         self._head_yaw = mp.Value("d", 0.0)
@@ -77,22 +87,103 @@ class CmdVelControlService:
         self._spin_once()
         with self._lock:
             if self._kick_active:
+                self._smoothed_vx = 0.0
                 return 0.0
-            return self._normalize(self._fresh_or_zero(self._vx), self.config.max_vx)
+            return self._smooth_vx_locked()
 
     def get_vy_cmd(self) -> float:
         self._spin_once()
         with self._lock:
             if self._kick_active:
+                self._smoothed_vy = 0.0
                 return 0.0
-            return self._normalize(self._fresh_or_zero(self._vy), self.config.max_vy)
+            return self._smooth_vy_locked()
 
     def get_vyaw_cmd(self) -> float:
         self._spin_once()
         with self._lock:
             if self._kick_active:
+                self._smoothed_vyaw = 0.0
                 return 0.0
-            return self._normalize(self._fresh_or_zero(self._vyaw), self.config.max_vyaw)
+            return self._smooth_vyaw_locked()
+
+    # ------------------------------------------------------------------
+    # Smoothing helpers (must be called while holding self._lock)
+    # ------------------------------------------------------------------
+    def _smooth_vx_locked(self) -> float:
+        return self._apply_smoothing(
+            raw=lambda: self._vx,
+            smoothed_attr="_smoothed_vx",
+            max_delta=self.config.max_delta_vx,
+            max_abs=self.config.max_vx,
+        )
+
+    def _smooth_vy_locked(self) -> float:
+        return self._apply_smoothing(
+            raw=lambda: self._vy,
+            smoothed_attr="_smoothed_vy",
+            max_delta=self.config.max_delta_vy,
+            max_abs=self.config.max_vy,
+        )
+
+    def _smooth_vyaw_locked(self) -> float:
+        return self._apply_smoothing(
+            raw=lambda: self._vyaw,
+            smoothed_attr="_smoothed_vyaw",
+            max_delta=self.config.max_delta_vyaw,
+            max_abs=self.config.max_vyaw,
+        )
+
+    def _apply_smoothing(
+        self,
+        raw,
+        smoothed_attr: str,
+        max_delta: float,
+        max_abs: float,
+    ) -> float:
+        """Apply EMA filter, deadband, rate limiter, and normalization.
+
+        Pipeline (all in normalized [-1, 1] space):
+          1. Normalize raw command
+          2. Deadband: zero out tiny commands
+          3. EMA low-pass filter (smoothing_alpha)
+          4. Rate limiter (max_delta per call)
+          5. Return final normalized value
+        """
+        alpha = self.config.smoothing_alpha
+        deadband = self.config.deadband
+
+        # 1. Normalize raw to [-1, 1]
+        raw_val = raw()
+        raw_norm = self._normalize(raw_val, max_abs)
+
+        # 2. Deadband
+        if abs(raw_norm) < deadband:
+            raw_norm = 0.0
+
+        # 3. EMA: smoothed = alpha * raw + (1 - alpha) * prev_smoothed
+        prev = getattr(self, smoothed_attr)
+        target = raw_norm
+
+        # If command is stale, decay toward zero instead of holding
+        if not self._is_fresh_locked():
+            target = 0.0
+            # Use stop_decay_alpha for gentle deceleration
+            decay_alpha = self.config.stop_decay_alpha
+            new_val = decay_alpha * target + (1.0 - decay_alpha) * prev
+        else:
+            new_val = alpha * target + (1.0 - alpha) * prev
+
+        # 4. Rate limiter: clamp delta
+        delta = new_val - prev
+        if delta > max_delta:
+            new_val = prev + max_delta
+        elif delta < -max_delta:
+            new_val = prev - max_delta
+
+        # Persist
+        setattr(self, smoothed_attr, new_val)
+        return new_val
 
     def get_head_override(self):
         if not self.config.head_override:
@@ -275,7 +366,76 @@ def main() -> int:
     parser.add_argument("--head-pitch-index", type=int, default=1)
     parser.add_argument("--head-timeout", type=float, default=0.0)
     parser.add_argument("--disable-head-override", action="store_true", default=False)
+    # -- Smoothing / rate-limiting --
+    parser.add_argument("--config", type=str, default=None,
+                        help="Path to YAML config file for smoothing parameters")
+    parser.add_argument("--smoothing-alpha", type=float, default=None,
+                        help="EMA smoothing factor (0=no smoothing, 1=instant)")
+    parser.add_argument("--max-delta-vx", type=float, default=None,
+                        help="Max vx change per control step (normalized)")
+    parser.add_argument("--max-delta-vy", type=float, default=None,
+                        help="Max vy change per control step (normalized)")
+    parser.add_argument("--max-delta-vyaw", type=float, default=None,
+                        help="Max vyaw change per control step (normalized)")
+    parser.add_argument("--deadband", type=float, default=None,
+                        help="Commands below this (normalized) are zeroed")
+    parser.add_argument("--stop-decay-alpha", type=float, default=None,
+                        help="Decay rate when cmd times out (lower=gentler stop)")
     args = parser.parse_args()
+
+    # -- Load YAML config (lower priority than explicit CLI args) --
+    yaml_smoothing: dict = {}
+    config_path = args.config
+    if config_path is None:
+        # Try default location next to this script
+        import os as _os
+        _default_config = _os.path.join(_os.path.dirname(_os.path.abspath(__file__)), "smoothing_config.yaml")
+        if _os.path.isfile(_default_config):
+            config_path = _default_config
+    if config_path is not None:
+        try:
+            import yaml
+            with open(config_path, "r") as f:
+                yaml_data = yaml.safe_load(f)
+            if isinstance(yaml_data, dict):
+                yaml_smoothing = yaml_data.get("smoothing", {}) or {}
+            print(f"[bt_cmd_vel] loaded smoothing config: {config_path}")
+        except ImportError:
+            print("[bt_cmd_vel] PyYAML not installed; skipping config file loading")
+        except Exception as exc:
+            print(f"[bt_cmd_vel] failed to load config {config_path}: {exc}")
+
+    def _resolve(name: str, default: float) -> float:
+        """CLI arg > YAML config > hardcoded default."""
+        cli_val = getattr(args, name.replace("-", "_"), None)
+        if cli_val is not None:
+            return cli_val
+        yaml_key = name  # e.g. "smoothing-alpha" → yaml key "smoothing-alpha" or "alpha"
+        # Also try short form keys
+        short_map = {
+            "smoothing-alpha": "alpha",
+            "max-delta-vx": "max_delta_vx",
+            "max-delta-vy": "max_delta_vy",
+            "max-delta-vyaw": "max_delta_vyaw",
+            "deadband": "deadband",
+            "stop-decay-alpha": "stop_decay_alpha",
+        }
+        yaml_key_short = short_map.get(name, name)
+        return float(yaml_smoothing.get(yaml_key, yaml_smoothing.get(yaml_key_short, default)))
+
+    smoothing_alpha = _resolve("smoothing-alpha", 0.3)
+    max_delta_vx = _resolve("max-delta-vx", 0.15)
+    max_delta_vy = _resolve("max-delta-vy", 0.15)
+    max_delta_vyaw = _resolve("max-delta-vyaw", 0.2)
+    deadband = _resolve("deadband", 0.08)
+    stop_decay_alpha = _resolve("stop-decay-alpha", 0.5)
+
+    print(
+        f"[bt_cmd_vel] smoothing: alpha={smoothing_alpha:.3f} "
+        f"delta_vx={max_delta_vx:.3f} delta_vy={max_delta_vy:.3f} delta_vyaw={max_delta_vyaw:.3f} "
+        f"deadband={deadband:.4f} stop_decay={stop_decay_alpha:.3f}",
+        flush=True,
+    )
 
     sys.path.append(".")
     import_all_tasks()
@@ -308,6 +468,12 @@ def main() -> int:
         head_pitch_index=args.head_pitch_index,
         head_timeout_sec=args.head_timeout,
         head_override=not args.disable_head_override,
+        smoothing_alpha=smoothing_alpha,
+        max_delta_vx=max_delta_vx,
+        max_delta_vy=max_delta_vy,
+        max_delta_vyaw=max_delta_vyaw,
+        deadband=deadband,
+        stop_decay_alpha=stop_decay_alpha,
     )
 
     class BoundCmdVelControlService(CmdVelControlService):

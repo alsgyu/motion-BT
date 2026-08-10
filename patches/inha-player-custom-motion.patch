@@ -110,9 +110,9 @@ index 256ed77a..cd745586 100644
 +      require_subscriber: false
 +      brain_controls_mode: false
 +      cmd_vel_update_interval_msec: 500.0
-+      velocity_scale_x: 1.35
-+      velocity_scale_y: 1.35
-+      velocity_scale_theta: 1.35
++      velocity_scale_x: 1.0
++      velocity_scale_y: 1.0
++      velocity_scale_theta: 1.0
 +      soccer_mode_stop_settle_msec: 350.0
 +
      strategy:
@@ -137,9 +137,9 @@ index dedf0385..b9862e27 100644
 +    bool customMotionRequireSubscriber = false;
 +    bool customMotionBrainControlsMode = false;
 +    double customMotionCmdVelUpdateIntervalMsec = 500.0;
-+    double customMotionVelocityScaleX = 1.35;
-+    double customMotionVelocityScaleY = 1.35;
-+    double customMotionVelocityScaleTheta = 1.35;
++    double customMotionVelocityScaleX = 1.0;
++    double customMotionVelocityScaleY = 1.0;
++    double customMotionVelocityScaleTheta = 1.0;
 +    double customMotionSoccerModeStopSettleMsec = 350.0;
 +
      double robotOdomFactor = 1.0; // 기본/fallback 보정계수
@@ -311,17 +311,17 @@ index e6e420e8..3d38131f 100644
 +        ),
 +        DeclareLaunchArgument(
 +            'custom_motion_velocity_scale_x',
-+            default_value='1.35',
++            default_value='1.0',
 +            description='Scale x velocity commands before publishing to custom motion'
 +        ),
 +        DeclareLaunchArgument(
 +            'custom_motion_velocity_scale_y',
-+            default_value='1.35',
++            default_value='1.0',
 +            description='Scale y velocity commands before publishing to custom motion'
 +        ),
 +        DeclareLaunchArgument(
 +            'custom_motion_velocity_scale_theta',
-+            default_value='1.35',
++            default_value='1.0',
 +            description='Scale yaw velocity commands before publishing to custom motion'
 +        ),
 +        DeclareLaunchArgument(
@@ -343,9 +343,9 @@ index e3db3e58..774b35e4 100644
 +  declare_parameter<bool>("custom_motion.require_subscriber", false);
 +  declare_parameter<bool>("custom_motion.brain_controls_mode", false);
 +  declare_parameter<double>("custom_motion.cmd_vel_update_interval_msec", 500.0);
-+  declare_parameter<double>("custom_motion.velocity_scale_x", 1.35);
-+  declare_parameter<double>("custom_motion.velocity_scale_y", 1.35);
-+  declare_parameter<double>("custom_motion.velocity_scale_theta", 1.35);
++  declare_parameter<double>("custom_motion.velocity_scale_x", 1.0);
++  declare_parameter<double>("custom_motion.velocity_scale_y", 1.0);
++  declare_parameter<double>("custom_motion.velocity_scale_theta", 1.0);
 +  declare_parameter<double>("custom_motion.soccer_mode_stop_settle_msec", 350.0);
 +
    declare_parameter<double>("robot.robot_height", 1.0);

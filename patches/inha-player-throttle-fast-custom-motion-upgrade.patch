@@ -5,9 +5,9 @@ index 6944bdc6..cd745586 100644
 @@ -36,2 +36,7 @@ brain_node:
        brain_controls_mode: false
 +      cmd_vel_update_interval_msec: 500.0
-+      velocity_scale_x: 1.35
-+      velocity_scale_y: 1.35
-+      velocity_scale_theta: 1.35
++      velocity_scale_x: 1.0
++      velocity_scale_y: 1.0
++      velocity_scale_theta: 1.0
 +      soccer_mode_stop_settle_msec: 350.0
  
 diff --git a/INHA-Player/src/brain/include/brain_config.h b/INHA-Player/src/brain/include/brain_config.h
@@ -17,9 +17,9 @@ index 6f2452b6..b9862e27 100644
 @@ -239,2 +239,7 @@ public:
      bool customMotionBrainControlsMode = false;
 +    double customMotionCmdVelUpdateIntervalMsec = 500.0;
-+    double customMotionVelocityScaleX = 1.35;
-+    double customMotionVelocityScaleY = 1.35;
-+    double customMotionVelocityScaleTheta = 1.35;
++    double customMotionVelocityScaleX = 1.0;
++    double customMotionVelocityScaleY = 1.0;
++    double customMotionVelocityScaleTheta = 1.0;
 +    double customMotionSoccerModeStopSettleMsec = 350.0;
  
 diff --git a/INHA-Player/src/brain/include/kick.h b/INHA-Player/src/brain/include/kick.h
@@ -99,17 +99,17 @@ index 1b3b02b1..3d38131f 100644
 +        ),
 +        DeclareLaunchArgument(
 +            'custom_motion_velocity_scale_x',
-+            default_value='1.35',
++            default_value='1.0',
 +            description='Scale x velocity commands before publishing to custom motion'
 +        ),
 +        DeclareLaunchArgument(
 +            'custom_motion_velocity_scale_y',
-+            default_value='1.35',
++            default_value='1.0',
 +            description='Scale y velocity commands before publishing to custom motion'
 +        ),
 +        DeclareLaunchArgument(
 +            'custom_motion_velocity_scale_theta',
-+            default_value='1.35',
++            default_value='1.0',
 +            description='Scale yaw velocity commands before publishing to custom motion'
 +        ),
 +        DeclareLaunchArgument(
@@ -125,9 +125,9 @@ index 7e65ecd6..774b35e4 100644
 @@ -130,2 +130,7 @@ Brain::Brain() : rclcpp::Node("brain_node", rclcpp::NodeOptions().allow_undeclar
    declare_parameter<bool>("custom_motion.brain_controls_mode", false);
 +  declare_parameter<double>("custom_motion.cmd_vel_update_interval_msec", 500.0);
-+  declare_parameter<double>("custom_motion.velocity_scale_x", 1.35);
-+  declare_parameter<double>("custom_motion.velocity_scale_y", 1.35);
-+  declare_parameter<double>("custom_motion.velocity_scale_theta", 1.35);
++  declare_parameter<double>("custom_motion.velocity_scale_x", 1.0);
++  declare_parameter<double>("custom_motion.velocity_scale_y", 1.0);
++  declare_parameter<double>("custom_motion.velocity_scale_theta", 1.0);
 +  declare_parameter<double>("custom_motion.soccer_mode_stop_settle_msec", 350.0);
  
 @@ -716,2 +721,7 @@ void Brain::loadConfig() {
