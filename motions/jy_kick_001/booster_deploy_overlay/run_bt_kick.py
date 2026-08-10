@@ -326,7 +326,11 @@ class KickRunner:
 
         # Startup hold phase
         if now < self._hold_until:
-            self._send_joint_command(DEFAULT_JOINT_POS)
+            # Preserve non-policy joints (head, arms) from current robot state
+            # instead of snapping everything to DEFAULT_JOINT_POS.
+            hold_targets = self._joint_pos.clone()
+            hold_targets[self._policy_joint_idx] = DEFAULT_JOINT_POS[self._policy_joint_idx]
+            self._send_joint_command(hold_targets)
             return True
 
         # Run inference
@@ -342,8 +346,12 @@ class KickRunner:
             return False
 
         self._last_action.copy_(action)
-        targets = DEFAULT_JOINT_POS.clone()
-        targets[self._policy_joint_idx] += action * ACTION_SCALE
+        # Preserve non-policy joints (head, arms) from current robot state,
+        # only override the 12 policy leg joints with kick policy output.
+        targets = self._joint_pos.clone()
+        targets[self._policy_joint_idx] = (
+            DEFAULT_JOINT_POS[self._policy_joint_idx] + action * ACTION_SCALE
+        )
         self._send_joint_command(targets)
 
         return True

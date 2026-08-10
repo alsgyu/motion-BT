@@ -40,6 +40,9 @@ class CmdVelControlConfig:
     max_output_vx: float = 1.0         # clamp |vx| <= this (1.0 = no extra limit)
     max_output_vy: float = 1.0         # clamp |vy| <= this
     max_output_vyaw: float = 1.0       # clamp |vyaw| <= this
+    # -- Ramp-up: gradually increase max_output from safe to target --
+    ramp_up_time_sec: float = 2.0      # time to ramp from safe output to max_output
+    ramp_start_output: float = 0.5     # initial output clamp when cmd first arrives
 
 
 class CmdVelControlService:
@@ -64,6 +67,9 @@ class CmdVelControlService:
         self._head_pitch = mp.Value("d", 0.0)
         self._head_yaw = mp.Value("d", 0.0)
         self._head_last_cmd_time = mp.Value("d", 0.0)
+        # Ramp-up state: track when non-zero cmd first arrives to gradually raise max_output
+        self._ramp_start_time = 0.0  # monotonic time when ramp began
+        self._ramp_was_active = False  # whether ramp was in progress last step
 
     def get_operation_hint(self) -> str:
         hint = f"Listening for BT velocity commands on {self.config.topic}"
@@ -156,7 +162,8 @@ class CmdVelControlService:
           2. Deadband: zero out tiny commands
           3. EMA low-pass filter (smoothing_alpha)
           4. Rate limiter (max_delta per call)
-          5. Output clamp (max_output)
+          5. Ramp-aware output clamp: gradually increases from ramp_start_output
+             to max_output over ramp_up_time_sec when a fresh command arrives.
           6. Return final normalized value
         """
         alpha = self.config.smoothing_alpha
@@ -174,8 +181,10 @@ class CmdVelControlService:
         prev = getattr(self, smoothed_attr)
         target = raw_norm
 
+        fresh = self._is_fresh_locked()
+
         # If command is stale, decay toward zero instead of holding
-        if not self._is_fresh_locked():
+        if not fresh:
             target = 0.0
             # Use stop_decay_alpha for gentle deceleration
             decay_alpha = self.config.stop_decay_alpha
@@ -190,15 +199,50 @@ class CmdVelControlService:
         elif delta < -max_delta:
             new_val = prev - max_delta
 
-        # 5. Output clamp: hard limit final value
-        if new_val > max_output:
-            new_val = max_output
-        elif new_val < -max_output:
-            new_val = -max_output
+        # 5. Ramp-aware output clamp
+        effective_max = self._compute_ramp_max_output(max_output, fresh)
+        if new_val > effective_max:
+            new_val = effective_max
+        elif new_val < -effective_max:
+            new_val = -effective_max
 
         # Persist
         setattr(self, smoothed_attr, new_val)
         return new_val
+
+    def _compute_ramp_max_output(self, target_max: float, fresh: bool) -> float:
+        """Compute effective max_output with ramp-up from safe start to target.
+
+        When a fresh command first arrives (after being idle/decaying), the output
+        clamp starts at ramp_start_output and linearly increases to target_max over
+        ramp_up_time_sec.  When the command is stale, the ramp resets so the next
+        fresh command will ramp up again from the safe floor.
+        """
+        ramp_time = self.config.ramp_up_time_sec
+        ramp_start = self.config.ramp_start_output
+
+        # If ramp is disabled or start >= target, just use target
+        if ramp_time <= 0.0 or ramp_start >= target_max:
+            return target_max
+
+        now = time.monotonic()
+
+        if fresh:
+            # Detect rising edge: was idle/decaying, now fresh
+            if not self._ramp_was_active:
+                self._ramp_start_time = now
+            self._ramp_was_active = True
+
+            elapsed = now - self._ramp_start_time
+            if elapsed >= ramp_time:
+                return target_max
+            progress = elapsed / ramp_time
+            return ramp_start + (target_max - ramp_start) * progress
+        else:
+            # Command is stale → reset ramp for next time
+            self._ramp_was_active = False
+            # Still clamp decaying output to target_max (don't artificially lower it)
+            return target_max
 
     def get_head_override(self):
         if not self.config.head_override:
@@ -403,6 +447,11 @@ def main() -> int:
                         help="Hard clamp |vy output| <= this (1.0=no limit)")
     parser.add_argument("--max-output-vyaw", type=float, default=None,
                         help="Hard clamp |vyaw output| <= this (1.0=no limit)")
+    # -- Ramp-up --
+    parser.add_argument("--ramp-up-time-sec", type=float, default=None,
+                        help="Time to ramp output clamp from safe to max (seconds)")
+    parser.add_argument("--ramp-start-output", type=float, default=None,
+                        help="Initial output clamp when command first arrives")
     args = parser.parse_args()
 
     # -- Load YAML config (lower priority than explicit CLI args) --
@@ -444,6 +493,8 @@ def main() -> int:
             "max-output-vx": "max_output_vx",
             "max-output-vy": "max_output_vy",
             "max-output-vyaw": "max_output_vyaw",
+            "ramp-up-time-sec": "ramp_up_time_sec",
+            "ramp-start-output": "ramp_start_output",
         }
         yaml_key_short = short_map.get(name, name)
         return float(yaml_smoothing.get(yaml_key, yaml_smoothing.get(yaml_key_short, default)))
@@ -457,12 +508,15 @@ def main() -> int:
     max_output_vx = _resolve("max-output-vx", 1.0)
     max_output_vy = _resolve("max-output-vy", 1.0)
     max_output_vyaw = _resolve("max-output-vyaw", 1.0)
+    ramp_up_time_sec = _resolve("ramp-up-time-sec", 2.0)
+    ramp_start_output = _resolve("ramp-start-output", 0.5)
 
     print(
         f"[bt_cmd_vel] smoothing: alpha={smoothing_alpha:.3f} "
         f"delta_vx={max_delta_vx:.3f} delta_vy={max_delta_vy:.3f} delta_vyaw={max_delta_vyaw:.3f} "
         f"deadband={deadband:.4f} stop_decay={stop_decay_alpha:.3f} "
-        f"max_out(vx={max_output_vx:.2f} vy={max_output_vy:.2f} vyaw={max_output_vyaw:.2f})",
+        f"max_out(vx={max_output_vx:.2f} vy={max_output_vy:.2f} vyaw={max_output_vyaw:.2f}) "
+        f"ramp(up={ramp_up_time_sec:.1f}s start={ramp_start_output:.2f})",
         flush=True,
     )
 
@@ -506,6 +560,8 @@ def main() -> int:
         max_output_vx=max_output_vx,
         max_output_vy=max_output_vy,
         max_output_vyaw=max_output_vyaw,
+        ramp_up_time_sec=ramp_up_time_sec,
+        ramp_start_output=ramp_start_output,
     )
 
     class BoundCmdVelControlService(CmdVelControlService):
