@@ -14,11 +14,9 @@ upgrade_patch_files=(
   "$repo_root/patches/inha-player-soccer-head-reacquire-upgrade.patch"
   "$repo_root/patches/inha-player-mode-stop-and-last-known-upgrade.patch"
   "$repo_root/patches/inha-player-smooth-stop-tight-kick-align-upgrade.patch"
+  "$repo_root/patches/inha-player-throttle-fast-custom-motion-upgrade.patch"
   "$repo_root/patches/inha-player-custom-kick.patch"
 )
-# NOTE: inha-player-throttle-fast-custom-motion-upgrade.patch is removed —
-# its features (throttling, velocity_scale, settle, tracked-ball fallback)
-# are all included in the base custom-motion.patch.
 
 if [ ! -d "$player_root/src/brain" ]; then
   echo "[ERROR] INHA-Player brain package not found: $player_root/src/brain" >&2
@@ -41,10 +39,6 @@ apply_upgrade_patch() {
   elif git -C "$inha_soccer_root" apply --check "$upgrade_patch_file" >/dev/null 2>&1; then
     echo "[PATCH] applying $upgrade_patch_name"
     git -C "$inha_soccer_root" apply "$upgrade_patch_file"
-  elif git -C "$inha_soccer_root" apply --reject --whitespace=fix "$upgrade_patch_file" 2>/dev/null; then
-    echo "[PATCH] $upgrade_patch_name partially applied (some hunks skipped — already in base patch)"
-    # Clean up .rej files — these are duplicate hunks that base patch already handled
-    find "$inha_soccer_root" -name "*.rej" -delete 2>/dev/null || true
   else
     if upgrade_patch_already_integrated "$upgrade_patch_name"; then
       echo "[PATCH] $upgrade_patch_name already integrated"
@@ -96,6 +90,17 @@ upgrade_patch_already_integrated() {
         grep -q 'safe_dist="0.55" target_back_angle_deg="15.0"' "$player_root/src/brain/behavior_trees/subtrees/setpiece.xml" &&
         grep -q "kickTargetLateralTolerance = 0.20" "$player_root/src/brain/src/striker_decision.cpp" &&
         grep -q "kickTargetLateralTolerance = 0.20" "$player_root/src/brain/src/setpiece.cpp"
+      ;;
+    inha-player-throttle-fast-custom-motion-upgrade.patch)
+      grep -q "customMotionCmdVelUpdateIntervalMsec" "$player_root/src/brain/include/brain_config.h" &&
+        grep -q "customMotionSoccerModeStopSettleMsec" "$player_root/src/brain/include/brain_config.h" &&
+        grep -q "setVelocity_throttled" "$player_root/src/brain/src/robot_client.cpp" &&
+        grep -q "useTrackedVisualKickBall" "$player_root/src/brain/src/brain.cpp" &&
+        grep -q "kRecentTrackedBallMsec" "$player_root/src/brain/src/kick.cpp" &&
+        grep -q "custom_motion_cmd_vel_update_interval_msec" "$player_root/src/brain/launch/launch.py" &&
+        grep -q "custom_motion_soccer_mode_stop_settle_msec" "$player_root/src/brain/launch/launch.py" &&
+        grep -q "velocity_scale_x: 1.35" "$player_root/src/brain/config/config.yaml" &&
+        grep -q "soccer_mode_stop_settle_msec: 350.0" "$player_root/src/brain/config/config.yaml"
       ;;
     inha-player-custom-kick.patch)
       grep -q "customKickEnable" "$player_root/src/brain/include/brain_config.h" &&
