@@ -387,6 +387,14 @@ def import_all_tasks():
 def patch_head_override(controller_mod):
     original_ctrl_step = controller_mod.BoosterRobotController.ctrl_step
 
+    # Disable internal head tracking so BT's head command (via
+    # patch_head_override) takes full control.  Otherwise
+    # _apply_internal_head_targets() overwrites dof_targets head
+    # joints with Loco API or ball-tracking values every ctrl_step.
+    controller_mod.BoosterRobotController._apply_internal_head_targets = (
+        lambda self, dof_targets: None
+    )
+
     def ctrl_step_with_head_override(self, dof_targets):
         head_cmd = self.portal.remoteControlService.get_head_override()
         if head_cmd is None:
