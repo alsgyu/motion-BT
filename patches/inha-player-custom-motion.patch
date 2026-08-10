@@ -1065,14 +1065,15 @@ diff --git a/INHA-Player/src/brain/src/walk.cpp b/INHA-Player/src/brain/src/walk
 index d086e1fd..e8fbf36a 100644
 --- a/INHA-Player/src/brain/src/walk.cpp
 +++ b/INHA-Player/src/brain/src/walk.cpp
-@@ -56,2 +56,14 @@ NodeStatus RobocupWalk::tick()
+@@ -56,2 +56,16 @@ NodeStatus RobocupWalk::tick()
      // Intended to be wrapped by a RunOnce decorator at behavior-tree startup.
 +    if (brain->config->customMotionEnable) {
 +        const bool visualKickActive = brain->tree->getEntry<bool>("visual_kick_active");
++        const bool alreadyCustom = brain->tree->getEntry<bool>("is_custom_motion_mode");
 +        if (visualKickActive) {
 +            brain->client->changeRobocupMode();
 +            brain->tree->setEntry<string>("robocup_mode_target", "soccer");
-+        } else {
++        } else if (!alreadyCustom) {
 +            brain->client->changeCustomMode();
 +            brain->tree->setEntry<string>("robocup_mode_target", "custom_motion");
 +        }
