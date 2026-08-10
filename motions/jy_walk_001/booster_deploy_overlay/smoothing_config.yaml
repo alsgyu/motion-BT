@@ -136,9 +136,9 @@ smoothing:
   #   둘이 함께 쓰면: 출발 시 ramp가 상한을 0.5로 묶고,
   #   max_delta가 그 안에서도 스텝 간 급격한 점프를 방지.
   #
-  # 권장: ramp_start_output=0.5, ramp_up_time_sec=2.0
-  ramp_up_time_sec: 2.0
-  ramp_start_output: 0.5
+  # 권장: ramp_start_output=0.3, ramp_up_time_sec=3.0
+  ramp_up_time_sec: 3.0
+  ramp_start_output: 0.3
 
 # ==========================================================================
 # Presets (원하는 프리셋을 위쪽 smoothing: 아래에 붙여넣어 사용)
