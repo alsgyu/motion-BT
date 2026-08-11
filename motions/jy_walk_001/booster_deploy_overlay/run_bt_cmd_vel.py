@@ -60,16 +60,10 @@ class CmdVelControlService:
         self._vx = 0.0
         self._vy = 0.0
         self._vyaw = 0.0
-        self._smoothed_vx = 0.0
-        self._smoothed_vy = 0.0
-        self._smoothed_vyaw = 0.0
         self._head_lock = mp.Lock()
         self._head_pitch = mp.Value("d", 0.0)
         self._head_yaw = mp.Value("d", 0.0)
         self._head_last_cmd_time = mp.Value("d", 0.0)
-        # Ramp-up state: track when non-zero cmd first arrives to gradually raise max_output
-        self._ramp_start_time = 0.0  # monotonic time when ramp began
-        self._ramp_was_active = False  # whether ramp was in progress last step
 
     def get_operation_hint(self) -> str:
         hint = f"Listening for BT velocity commands on {self.config.topic}"
@@ -84,165 +78,35 @@ class CmdVelControlService:
         return "Auto-starting RL gait for BT control."
 
     def start_custom_mode(self) -> bool:
-        if not self.config.require_first_cmd:
-            return True
-        return self._has_fresh_command()
+        return True
 
     def start_rl_gait(self) -> bool:
-        if not self.config.require_first_cmd:
-            return True
-        return self._has_fresh_command()
+        return True
 
     def get_vx_cmd(self) -> float:
         self._spin_once()
         with self._lock:
             if self._kick_active:
-                self._smoothed_vx = 0.0
                 return 0.0
-            return self._smooth_vx_locked()
+            return self._normalize(self._vx, self.config.max_vx)
 
     def get_vy_cmd(self) -> float:
         self._spin_once()
         with self._lock:
             if self._kick_active:
-                self._smoothed_vy = 0.0
                 return 0.0
-            return self._smooth_vy_locked()
+            return self._normalize(self._vy, self.config.max_vy)
 
     def get_vyaw_cmd(self) -> float:
         self._spin_once()
         with self._lock:
             if self._kick_active:
-                self._smoothed_vyaw = 0.0
                 return 0.0
-            return self._smooth_vyaw_locked()
+            return self._normalize(self._vyaw, self.config.max_vyaw)
 
     # ------------------------------------------------------------------
-    # Smoothing helpers (must be called while holding self._lock)
+    # Smoothing pipeline – currently disabled (raw pass-through).
     # ------------------------------------------------------------------
-    def _smooth_vx_locked(self) -> float:
-        return self._apply_smoothing(
-            raw=lambda: self._vx,
-            smoothed_attr="_smoothed_vx",
-            max_delta=self.config.max_delta_vx,
-            max_abs=self.config.max_vx,
-            max_output=self.config.max_output_vx,
-        )
-
-    def _smooth_vy_locked(self) -> float:
-        return self._apply_smoothing(
-            raw=lambda: self._vy,
-            smoothed_attr="_smoothed_vy",
-            max_delta=self.config.max_delta_vy,
-            max_abs=self.config.max_vy,
-            max_output=self.config.max_output_vy,
-        )
-
-    def _smooth_vyaw_locked(self) -> float:
-        return self._apply_smoothing(
-            raw=lambda: self._vyaw,
-            smoothed_attr="_smoothed_vyaw",
-            max_delta=self.config.max_delta_vyaw,
-            max_abs=self.config.max_vyaw,
-            max_output=self.config.max_output_vyaw,
-        )
-
-    def _apply_smoothing(
-        self,
-        raw,
-        smoothed_attr: str,
-        max_delta: float,
-        max_abs: float,
-        max_output: float = 1.0,
-    ) -> float:
-        """Apply EMA filter, deadband, rate limiter, output clamp, and normalization.
-
-        Pipeline (all in normalized [-1, 1] space):
-          1. Normalize raw command
-          2. Deadband: zero out tiny commands
-          3. EMA low-pass filter (smoothing_alpha)
-          4. Rate limiter (max_delta per call)
-          5. Ramp-aware output clamp: gradually increases from ramp_start_output
-             to max_output over ramp_up_time_sec when a fresh command arrives.
-          6. Return final normalized value
-        """
-        alpha = self.config.smoothing_alpha
-        deadband = self.config.deadband
-
-        # 1. Normalize raw to [-1, 1]
-        raw_val = raw()
-        raw_norm = self._normalize(raw_val, max_abs)
-
-        # 2. Deadband
-        if abs(raw_norm) < deadband:
-            raw_norm = 0.0
-
-        # 3. EMA: smoothed = alpha * raw + (1 - alpha) * prev_smoothed
-        prev = getattr(self, smoothed_attr)
-        target = raw_norm
-
-        fresh = self._is_fresh_locked()
-
-        # If command is stale, decay toward zero instead of holding
-        if not fresh:
-            target = 0.0
-            # Use stop_decay_alpha for gentle deceleration
-            decay_alpha = self.config.stop_decay_alpha
-            new_val = decay_alpha * target + (1.0 - decay_alpha) * prev
-        else:
-            new_val = alpha * target + (1.0 - alpha) * prev
-
-        # 4. Rate limiter: clamp delta
-        delta = new_val - prev
-        if delta > max_delta:
-            new_val = prev + max_delta
-        elif delta < -max_delta:
-            new_val = prev - max_delta
-
-        # 5. Ramp-aware output clamp
-        effective_max = self._compute_ramp_max_output(max_output, fresh)
-        if new_val > effective_max:
-            new_val = effective_max
-        elif new_val < -effective_max:
-            new_val = -effective_max
-
-        # Persist
-        setattr(self, smoothed_attr, new_val)
-        return new_val
-
-    def _compute_ramp_max_output(self, target_max: float, fresh: bool) -> float:
-        """Compute effective max_output with ramp-up from safe start to target.
-
-        When a fresh command first arrives (after being idle/decaying), the output
-        clamp starts at ramp_start_output and linearly increases to target_max over
-        ramp_up_time_sec.  When the command is stale, the ramp resets so the next
-        fresh command will ramp up again from the safe floor.
-        """
-        ramp_time = self.config.ramp_up_time_sec
-        ramp_start = self.config.ramp_start_output
-
-        # If ramp is disabled or start >= target, just use target
-        if ramp_time <= 0.0 or ramp_start >= target_max:
-            return target_max
-
-        now = time.monotonic()
-
-        if fresh:
-            # Detect rising edge: was idle/decaying, now fresh
-            if not self._ramp_was_active:
-                self._ramp_start_time = now
-            self._ramp_was_active = True
-
-            elapsed = now - self._ramp_start_time
-            if elapsed >= ramp_time:
-                return target_max
-            progress = elapsed / ramp_time
-            return ramp_start + (target_max - ramp_start) * progress
-        else:
-            # Command is stale → reset ramp for next time
-            self._ramp_was_active = False
-            # Still clamp decaying output to target_max (don't artificially lower it)
-            return target_max
 
     def get_head_override(self):
         if not self.config.head_override:
@@ -351,23 +215,6 @@ class CmdVelControlService:
         self._kick_active = bool(msg.data)
         if was_active != self._kick_active:
             print(f"[bt_cmd_vel] kick_active={self._kick_active}", flush=True)
-
-    def _has_fresh_command(self) -> bool:
-        self._spin_once()
-        with self._lock:
-            return self._last_cmd_time > 0.0 and self._is_fresh_locked()
-
-    def _fresh_or_zero(self, value: float) -> float:
-        if not self._is_fresh_locked():
-            return 0.0
-        return value
-
-    def _is_fresh_locked(self) -> bool:
-        if self._last_cmd_time <= 0.0:
-            return False
-        if self.config.timeout_sec <= 0.0:
-            return True
-        return time.monotonic() - self._last_cmd_time <= self.config.timeout_sec
 
     @staticmethod
     def _normalize(value: float, scale: float) -> float:
