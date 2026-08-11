@@ -12,7 +12,7 @@ from dataclasses import dataclass
 
 DEFAULT_CHECKPOINT = (
     "/home/booster/Workspace/deploy/tasks/scratch/models/"
-    "JY_walk_001_symmetry_2026-07-30_18-18-57_best_best.pt"
+    "JY_walk_001_symmetry_2026-08-09_23-47-13.pt"
 )
 
 
