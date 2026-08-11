@@ -269,10 +269,24 @@ def patch_head_override(controller_mod):
     _debug_step = [0]
 
     def ctrl_step_with_head_override(self, dof_targets):
-        # Spin ROS once so debug reads latest cmd_vel values
-        self.portal.remoteControlService._spin_once()
+        head_cmd = self.portal.remoteControlService.get_head_override()
+        if head_cmd is None:
+            result = original_ctrl_step(self, dof_targets)
+        else:
+            pitch, yaw = head_cmd
+            yaw_index = self.portal.remoteControlService.config.head_yaw_index
+            pitch_index = self.portal.remoteControlService.config.head_pitch_index
+            if yaw_index >= self.robot.num_joints or pitch_index >= self.robot.num_joints:
+                result = original_ctrl_step(self, dof_targets)
+            else:
+                dof_targets = dof_targets.clone()
+                if yaw_index >= 0:
+                    dof_targets[yaw_index] = yaw
+                if pitch_index >= 0:
+                    dof_targets[pitch_index] = pitch
+                result = original_ctrl_step(self, dof_targets)
 
-        # Print normalized cmd every 50 steps
+        # Print cmd every ~1 sec (after spin_once in get_vx_cmd has updated values)
         _debug_step[0] += 1
         if _debug_step[0] % 50 == 1:
             svc = self.portal.remoteControlService
@@ -288,22 +302,7 @@ def patch_head_override(controller_mod):
                 flush=True,
             )
 
-        head_cmd = self.portal.remoteControlService.get_head_override()
-        if head_cmd is None:
-            return original_ctrl_step(self, dof_targets)
-
-        pitch, yaw = head_cmd
-        yaw_index = self.portal.remoteControlService.config.head_yaw_index
-        pitch_index = self.portal.remoteControlService.config.head_pitch_index
-        if yaw_index >= self.robot.num_joints or pitch_index >= self.robot.num_joints:
-            return original_ctrl_step(self, dof_targets)
-
-        dof_targets = dof_targets.clone()
-        if yaw_index >= 0:
-            dof_targets[yaw_index] = yaw
-        if pitch_index >= 0:
-            dof_targets[pitch_index] = pitch
-        return original_ctrl_step(self, dof_targets)
+        return result
 
     controller_mod.BoosterRobotController.ctrl_step = ctrl_step_with_head_override
 
