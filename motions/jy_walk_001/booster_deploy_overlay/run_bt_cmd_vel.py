@@ -105,8 +105,7 @@ class CmdVelControlService:
             return self._normalize(self._vyaw, self.config.max_vyaw)
 
     def get_cmd_debug(self) -> tuple[float, float, float]:
-        """Return (vx, vy, vyaw) for debug print, throttled externally."""
-        self._spin_once()
+        """Return (vx, vy, vyaw) for debug print. Assumes _spin_once already called."""
         with self._lock:
             raw_vx = self._vx
             raw_vy = self._vy
