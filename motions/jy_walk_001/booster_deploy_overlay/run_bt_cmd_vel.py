@@ -104,6 +104,22 @@ class CmdVelControlService:
                 return 0.0
             return self._normalize(self._vyaw, self.config.max_vyaw)
 
+    def get_cmd_debug(self) -> tuple[float, float, float]:
+        """Return (vx, vy, vyaw) for debug print, throttled externally."""
+        self._spin_once()
+        with self._lock:
+            raw_vx = self._vx
+            raw_vy = self._vy
+            raw_vyaw = self._vyaw
+            kick = self._kick_active
+        if kick:
+            return 0.0, 0.0, 0.0
+        return (
+            self._normalize(raw_vx, self.config.max_vx),
+            self._normalize(raw_vy, self.config.max_vy),
+            self._normalize(raw_vyaw, self.config.max_vyaw),
+        )
+
     # ------------------------------------------------------------------
     # Smoothing pipeline – currently disabled (raw pass-through).
     # ------------------------------------------------------------------
@@ -183,6 +199,11 @@ class CmdVelControlService:
             self._vy = float(msg.linear.y)
             self._vyaw = float(msg.angular.z)
             self._last_cmd_time = time.monotonic()
+        # DEBUG: confirm callback is firing and values received
+        print(
+            f"[cmd_vel_cb] vx={self._vx:+.3f} vy={self._vy:+.3f} vyaw={self._vyaw:+.3f}",
+            flush=True,
+        )
 
     def _head_callback(self, msg):
         yaw = None
@@ -242,7 +263,26 @@ def patch_head_override(controller_mod):
         lambda self, dof_targets: None
     )
 
+    # Debug: print cmd values every ~1 second (50 steps at 50 Hz)
+    _debug_step = [0]
+
     def ctrl_step_with_head_override(self, dof_targets):
+        # Print normalized cmd every 50 steps
+        _debug_step[0] += 1
+        if _debug_step[0] % 50 == 1:
+            svc = self.portal.remoteControlService
+            vx, vy, vyaw = svc.get_cmd_debug()
+            raw_vx = svc._vx
+            raw_vy = svc._vy
+            raw_vyaw = svc._vyaw
+            kick = svc._kick_active
+            print(
+                f"[cmd_debug] raw(vx={raw_vx:+.3f} vy={raw_vy:+.3f} vyaw={raw_vyaw:+.3f}) "
+                f"norm(vx={vx:+.3f} vy={vy:+.3f} vyaw={vyaw:+.3f}) "
+                f"kick={kick}",
+                flush=True,
+            )
+
         head_cmd = self.portal.remoteControlService.get_head_override()
         if head_cmd is None:
             return original_ctrl_step(self, dof_targets)
