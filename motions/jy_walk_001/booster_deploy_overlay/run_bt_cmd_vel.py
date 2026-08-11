@@ -248,7 +248,10 @@ def import_all_tasks():
     import tasks as tasks_pkg
 
     for mod_info in pkgutil.walk_packages(tasks_pkg.__path__, prefix="tasks."):
-        __import__(mod_info.name)
+        try:
+            __import__(mod_info.name)
+        except Exception as exc:
+            print(f"[bt_cmd_vel] skipping broken task {mod_info.name}: {exc}", flush=True)
 
 
 def patch_head_override(controller_mod):
