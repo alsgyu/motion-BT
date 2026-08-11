@@ -130,4 +130,10 @@ cp -R "$repo_root/motions/jy_walk_001/." "$player_root/motions/jy_walk_001/"
 chmod +x "$player_root/motions/jy_walk_001/start_bt_custom_motion.sh"
 chmod +x "$player_root/motions/jy_walk_001/booster_deploy_overlay/run_bt_cmd_vel.py"
 
+echo "[MOTION] copying jy_kick_001 runtime folder"
+mkdir -p "$player_root/motions/jy_kick_001"
+cp -R "$repo_root/motions/jy_kick_001/." "$player_root/motions/jy_kick_001/"
+chmod +x "$player_root/motions/jy_kick_001/start_bt_custom_motion.sh"
+chmod +x "$player_root/motions/jy_kick_001/booster_deploy_overlay/run_bt_kick.py"
+
 echo "[DONE] Build INHA-Player with: cd $player_root && colcon build --symlink-install"

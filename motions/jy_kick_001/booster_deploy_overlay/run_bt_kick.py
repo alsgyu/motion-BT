@@ -93,7 +93,8 @@ OBS_DIM = 49
 ACTION_DIM = 12
 POLICY_DT = 0.02  # 50 Hz
 KICK_DURATION_SEC = 3.0  # maximum kick duration
-STARTUP_HOLD_SEC = 0.4  # hold default pose before policy control
+STARTUP_HOLD_SEC = 1.0  # hold default pose before policy control (braking phase)
+MAX_JOINT_VEL_FOR_KICK = 0.5  # rad/s — all leg joint vels must be below this to start kick
 
 
 # --- Kick state machine -----------------------------------------------------
@@ -324,14 +325,39 @@ class KickRunner:
             self.finish_kick()
             return False
 
-        # Startup hold phase
+        # Startup hold (braking) phase — bring robot to a complete stop
+        # before kick policy takes over.  Uses elevated leg stiffness to
+        # actively brake any residual motion from the walk policy.
+        #
+        # Non-policy joints (head, arms) are preserved from current robot
+        # state — the head stays at its last BT-commanded position.
         if now < self._hold_until:
-            # Preserve non-policy joints (head, arms) from current robot state
-            # instead of snapping everything to DEFAULT_JOINT_POS.
+            # Check if leg joints have settled
+            leg_vels = self._joint_vel[self._policy_joint_idx]
+            max_leg_vel = float(leg_vels.abs().max())
+
+            if max_leg_vel > MAX_JOINT_VEL_FOR_KICK:
+                # Robot is still moving — extend the hold to keep braking
+                self._hold_until = max(self._hold_until, now + POLICY_DT)
+                if int((now - self._kick_start_time) * 10) % 10 == 0:
+                    print(f"[kick] braking... max_leg_vel={max_leg_vel:.2f} rad/s", flush=True)
+
             hold_targets = self._joint_pos.clone()
             hold_targets[self._policy_joint_idx] = DEFAULT_JOINT_POS[self._policy_joint_idx]
-            self._send_joint_command(hold_targets)
+            # Use higher leg stiffness during braking for faster stop
+            self._send_joint_command(
+                hold_targets,
+                stiffness=40.0,
+                damping=2.0,
+                leg_stiffness=80.0,
+                leg_damping=3.0,
+            )
             return True
+
+        # Ready to kick
+        leg_vels = self._joint_vel[self._policy_joint_idx]
+        max_leg_vel = float(leg_vels.abs().max())
+        print(f"[kick] braking complete — starting policy (max_leg_vel={max_leg_vel:.2f} rad/s)", flush=True)
 
         # Run inference
         obs = self._compute_observation()
@@ -413,16 +439,38 @@ class KickRunner:
     # Robot command output
     # ------------------------------------------------------------------
 
-    def _send_joint_command(self, targets: torch.Tensor) -> None:
-        """Send joint position targets to the robot via SDK."""
+    def _send_joint_command(
+        self, targets: torch.Tensor,
+        stiffness: float = 40.0,
+        damping: float = 1.0,
+        leg_stiffness: float | None = None,
+        leg_damping: float | None = None,
+    ) -> None:
+        """Send joint position targets to the robot via SDK.
+
+        Args:
+            targets: 22-dim joint position target tensor.
+            stiffness: default stiffness for all joints.
+            damping: default damping for all joints.
+            leg_stiffness: stiffness override for policy (leg) joints.
+            leg_damping: damping override for policy (leg) joints.
+        """
         if self._channel is None:
             return
         try:
             cmd = self._channel.CreateJointCmd()
             for i in range(min(22, len(targets))):
                 cmd.joint_pos[i] = float(targets[i])
-            cmd.joint_stiffness = [40.0] * 22
-            cmd.joint_damping = [1.0] * 22
+            stiff = [stiffness] * 22
+            damp = [damping] * 22
+            if leg_stiffness is not None or leg_damping is not None:
+                for idx in self._policy_joint_idx.tolist():
+                    if leg_stiffness is not None:
+                        stiff[idx] = leg_stiffness
+                    if leg_damping is not None:
+                        damp[idx] = leg_damping
+            cmd.joint_stiffness = stiff
+            cmd.joint_damping = damp
             self._channel.SendJointCmd(cmd)
         except Exception as e:
             print(f"[kick] failed to send joint command: {e}", flush=True)
