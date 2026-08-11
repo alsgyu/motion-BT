@@ -50,9 +50,9 @@ smoothing:
   # ramp_up과 함께 쓸 경우:
   #   ramp_up이 출발 시 절대 상한을 제한하므로, max_delta는 주행 중
   #   방향전환/급정거 부드러움만 담당. 0.1~0.2로 충분.
-  max_delta_vx: 0.15
-  max_delta_vy: 0.15
-  max_delta_vyaw: 0.2
+  max_delta_vx: 0.02
+  max_delta_vy: 0.02
+  max_delta_vyaw: 0.02
 
   # ------------------------------------------------------------------
   # deadband: 불감대 (이 값 미만은 0으로 처리)
