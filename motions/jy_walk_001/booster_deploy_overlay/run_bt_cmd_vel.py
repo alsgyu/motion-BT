@@ -269,6 +269,9 @@ def patch_head_override(controller_mod):
     _debug_step = [0]
 
     def ctrl_step_with_head_override(self, dof_targets):
+        # Spin ROS once so debug reads latest cmd_vel values
+        self.portal.remoteControlService._spin_once()
+
         # Print normalized cmd every 50 steps
         _debug_step[0] += 1
         if _debug_step[0] % 50 == 1:
